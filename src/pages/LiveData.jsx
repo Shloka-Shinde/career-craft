@@ -6,6 +6,7 @@ const LiveData = () => {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
 
   // Fetch jobs when the component loads
   useEffect(() => {
@@ -22,6 +23,18 @@ const LiveData = () => {
     };
     fetchJobs();
   }, []);
+
+  // Get unique categories from jobs
+  const categories = [...new Set(jobs.map((job) => job.category))];
+
+  // Filter jobs based on search term and selected category
+  const filteredJobs = jobs.filter((job) => {
+    const matchesSearchTerm = job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              job.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory = selectedCategory ? job.category === selectedCategory : true;
+    return matchesSearchTerm && matchesCategory;
+  });
 
   // Job Card Component
   const JobCard = ({ job }) => (
@@ -70,6 +83,24 @@ const LiveData = () => {
         />
       </div>
 
+      {/* Category Filter Dropdown */}
+      <div className="mb-6">
+        <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-2">Filter by Category</label>
+        <select
+          id="category"
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">All Categories</option>
+          {categories.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {/* Job Listings */}
       <div>
         <h2 className="text-xl font-semibold mb-4">All Jobs</h2>
@@ -78,13 +109,13 @@ const LiveData = () => {
           <p>Loading jobs...</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {jobs.map((job) => (
+            {filteredJobs.map((job) => (
               <JobCard key={job._id} job={job} />
             ))}
           </div>
         )}
 
-        {!loading && jobs.length === 0 && (
+        {!loading && filteredJobs.length === 0 && (
           <p className="text-center text-gray-500">No jobs found.</p>
         )}
       </div>

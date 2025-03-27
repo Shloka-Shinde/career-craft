@@ -1,4 +1,3 @@
-// models/JobPost.js
 import mongoose from 'mongoose';
 
 const jobPostSchema = new mongoose.Schema({
@@ -30,7 +29,10 @@ const jobPostSchema = new mongoose.Schema({
     type: Date, 
     default: Date.now 
   },
-  
+  category: { 
+    type: String, 
+    required: true // Make sure the category is required
+  }
 });
 
 export default mongoose.model('JobPost', jobPostSchema);

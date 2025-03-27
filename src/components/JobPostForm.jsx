@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 
 const JobPostForm = () => {
@@ -8,8 +8,24 @@ const JobPostForm = () => {
     location: '',
     description: '',
     salary: '',
-    contactEmail: ''
+    contactEmail: '',
+    category: '' // Added category to the form data
   });
+
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    // Fetch categories from the backend
+    const fetchCategories = async () => {
+      try {
+        const response = await axios.get('http://127.0.0.1:5000/api/categories'); // Adjust URL if needed
+        setCategories(response.data.categories); // assuming response contains 'categories' field
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+    fetchCategories();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -31,7 +47,8 @@ const JobPostForm = () => {
         location: '',
         description: '',
         salary: '',
-        contactEmail: ''
+        contactEmail: '',
+        category: '' // Reset category after submission
       });
     } catch (error) {
       console.error('Error creating job post:', error);
@@ -107,6 +124,25 @@ const JobPostForm = () => {
             className="w-full px-3 py-2 border rounded-md"
           />
         </div>
+
+        {/* Category Dropdown */}
+        <div className="mb-4">
+          <select
+            name="category"
+            value={formData.category}
+            onChange={handleChange}
+            required
+            className="w-full px-3 py-2 border rounded-md"
+          >
+            <option value="">Select Category</option>
+            {categories && categories.length > 0 && categories.map((category, index) => (
+              <option key={index} value={category}>
+                {category}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <button
           type="submit"
           className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition-colors"
