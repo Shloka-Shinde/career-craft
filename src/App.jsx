@@ -20,6 +20,8 @@ import NotFound from "./pages/NotFound";
 import ForecastChart from "./pages/ForecastChart"; 
 import JobPostForm from "./components/JobPostForm";
 import LiveData from "./pages/LiveData"
+import ResumeBuilder from "./components/ResumeBuilder.jsx"
+import ResumeList from "./pages/ResumeList.jsx";
 
 // Create Query Client for React Query
 const queryClient = new QueryClient();
@@ -45,8 +47,12 @@ const App = () => (
             <Route path="/filter-sidebar" element={<FilterSidebar />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup-profile" element={<SetupProfile />} />
+            <Route path="/job-post-form" element={<JobPostForm />}  />
+            <Route path="/job-post" element={<JobPost />}  />
             <Route path="/candidate-profile" element={<CandidateProfile />} />
+            <Route path="/resume-list" element={<ResumeList />} />
             <Route path="/live-data" element={<LiveData />} />
+            <Route path="/resume-builder" element={<ResumeBuilder />} />
             <Route path="/forecast-chart" element={<ForecastChart />} /> {/* SARIMA Forecast Page */}
             <Route path="*" element={<NotFound />} /> {/* Catch-All 404 Page */}
           </Routes>

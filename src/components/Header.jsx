@@ -2,11 +2,14 @@ import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Menu, X } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { NotificationsDropdown } from "@/components/NotificationsDropdown";
 
 const Header = () => {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { isAuthenticated, signOut, isRecruiter } = useAuth();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -17,6 +20,7 @@ const Header = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  // Close mobile menu when changing routes
   useEffect(() => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
@@ -34,6 +38,7 @@ const Header = () => {
           </span>
         </Link>
 
+        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-8">
           <Link 
             to="/jobs" 
@@ -41,10 +46,29 @@ const Header = () => {
           >
             Find Jobs
           </Link>
+          
+          {isAuthenticated && !isRecruiter && (
+            <Link 
+              to="/job-seeker-dashboard" 
+              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+            >
+              Dashboard
+            </Link>
+          )}
+          
+          {isAuthenticated && isRecruiter && (
+            <Link 
+              to="/recruiter-dashboard" 
+              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+            >
+              Dashboard
+            </Link>
+          )}
+          
           <Link 
             to="/about" 
             className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
-          >
+            >
             About
           </Link>
           <Link 
@@ -55,19 +79,37 @@ const Header = () => {
           </Link>
         </nav>
 
+        {/* Authentication Buttons - Desktop */}
         <div className="hidden md:flex items-center space-x-4">
-          <Link to="/login">
-            <Button variant="outline" size="sm" className="h-9 px-4 font-medium">
-              Sign In
-            </Button>
-          </Link>
-          <Link to="/register">
-            <Button size="sm" className="h-9 px-4 font-medium">
-              Register
-            </Button>
-          </Link>
+          {isAuthenticated ? (
+            <>
+              <NotificationsDropdown />
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-9 px-4 font-medium"
+                onClick={() => signOut()}
+              >
+                Sign Out
+              </Button>
+            </>
+          ) : (
+            <>
+              <Link to="/auth">
+                <Button variant="outline" size="sm" className="h-9 px-4 font-medium">
+                  Sign In
+                </Button>
+              </Link>
+              <Link to="/auth">
+                <Button size="sm" className="h-9 px-4 font-medium">
+                  Register
+                </Button>
+              </Link>
+            </>
+          )}
         </div>
 
+        {/* Mobile Menu Toggle */}
         <button 
           className="md:hidden flex items-center p-2 rounded-md text-foreground/80 hover:text-primary transition-colors"
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -77,6 +119,7 @@ const Header = () => {
         </button>
       </div>
 
+      {/* Mobile Menu */}
       {isMobileMenuOpen && (
         <div className="md:hidden bg-white/95 backdrop-blur-md animate-fade-in">
           <div className="container mx-auto px-4 py-4 flex flex-col space-y-4">
@@ -86,6 +129,25 @@ const Header = () => {
             >
               Find Jobs
             </Link>
+            
+            {isAuthenticated && !isRecruiter && (
+              <Link 
+                to="/job-seeker-dashboard" 
+                className="text-sm font-medium py-2 text-foreground/80 hover:text-primary transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
+            
+            {isAuthenticated && isRecruiter && (
+              <Link 
+                to="/recruiter-dashboard" 
+                className="text-sm font-medium py-2 text-foreground/80 hover:text-primary transition-colors"
+              >
+                Dashboard
+              </Link>
+            )}
+            
             <Link 
               to="/about" 
               className="text-sm font-medium py-2 text-foreground/80 hover:text-primary transition-colors"
@@ -98,17 +160,35 @@ const Header = () => {
             >
               Contact
             </Link>
+            
             <div className="flex flex-col space-y-2 pt-2">
-              <Link to="/login">
-                <Button variant="outline" size="sm" className="w-full">
-                  Sign In
-                </Button>
-              </Link>
-              <Link to="/register">
-                <Button size="sm" className="w-full">
-                  Register
-                </Button>
-              </Link>
+              {isAuthenticated ? (
+                <>
+                  <div className="flex justify-end py-2">
+                    <NotificationsDropdown />
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => signOut()}
+                  >
+                    Sign Out
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link to="/auth">
+                    <Button variant="outline" size="sm" className="w-full">
+                      Sign In
+                    </Button>
+                  </Link>
+                  <Link to="/auth">
+                    <Button size="sm" className="w-full">
+                      Register
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

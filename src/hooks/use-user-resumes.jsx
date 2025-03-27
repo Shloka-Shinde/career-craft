@@ -1,141 +1,66 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import axios from 'axios';
 
-export function useUserResumes() {
-  const { user } = useAuth();
+export const useUserResumes = () => {
   const [resumes, setResumes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (!user) {
-      setResumes([]);
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchResumes = async () => {
+  // Fetch resumes
+  const fetchResumes = async () => {
+    try {
       setIsLoading(true);
-      try {
-        const { data, error: fetchError } = await supabase
-          .from('user_resumes')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('is_primary', { ascending: false })
-          .order('created_at', { ascending: false });
-
-        if (fetchError) throw fetchError;
-        setResumes(data || []);
-      } catch (err) {
-        console.error('Error fetching user resumes:', err);
-        setError(err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchResumes();
-  }, [user]);
-
-  const createResume = async (resume) => {
-    if (!user) throw new Error('User not authenticated');
-    
-    try {
-      if (resume.is_primary) {
-        await supabase
-          .from('user_resumes')
-          .update({ is_primary: false })
-          .eq('user_id', user.id)
-          .eq('is_primary', true);
-      } else if (resumes.length === 0) {
-        resume.is_primary = true;
-      }
-      
-      const { data, error } = await supabase
-        .from('user_resumes')
-        .insert({ ...resume, user_id: user.id })
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      if (resume.is_primary) {
-        setResumes(prev => prev.map(r => ({ ...r, is_primary: r.id === data.id })));
-      } else {
-        setResumes(prev => [...prev, data]);
-      }
-      
-      return data;
+      const response = await axios.get('http://localhost:5003/api/resumes');
+      setResumes(response.data);
+      setIsLoading(false);
     } catch (err) {
-      console.error('Error creating resume:', err);
+      console.error('Failed to fetch resumes:', err);
+      setError(err);
+      setIsLoading(false);
+    }
+  };
+
+  // Create resume
+  const createResume = async (resumeData) => {
+    try {
+      const response = await axios.post('http://localhost:5003/api/resumes', resumeData);
+      setResumes(prev => [...prev, response.data]);
+      return response.data;
+    } catch (err) {
+      console.error('Failed to create resume:', err);
       throw err;
     }
   };
 
-  const updateResume = async (id, updates) => {
-    if (!user) throw new Error('User not authenticated');
-    
+  // Update resume
+  const updateResume = async (id, resumeData) => {
     try {
-      if (updates.is_primary) {
-        await supabase
-          .from('user_resumes')
-          .update({ is_primary: false })
-          .eq('user_id', user.id)
-          .eq('is_primary', true)
-          .neq('id', id);
-      }
-      
-      const { data, error } = await supabase
-        .from('user_resumes')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      
-      setResumes(prev => {
-        return prev.map(r => {
-          if (r.id === id) return data;
-          if (updates.is_primary && r.is_primary) {
-            return { ...r, is_primary: false };
-          }
-          return r;
-        });
-      });
-      
-      return data;
+      const response = await axios.put(`http://localhost:5003/api/resumes/${id}`, resumeData);
+      setResumes(prev => 
+        prev.map(resume => resume._id === id ? response.data : resume)
+      );
+      return response.data;
     } catch (err) {
-      console.error('Error updating resume:', err);
+      console.error('Failed to update resume:', err);
       throw err;
     }
   };
 
+  // Delete resume
   const deleteResume = async (id) => {
-    if (!user) throw new Error('User not authenticated');
-    
     try {
-      const resumeToDelete = resumes.find(r => r.id === id);
-      const { error } = await supabase
-        .from('user_resumes')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-      
-      const updatedResumes = resumes.filter(r => r.id !== id);
-      setResumes(updatedResumes);
-      
-      if (resumeToDelete?.is_primary && updatedResumes.length > 0) {
-        const newPrimaryId = updatedResumes[0].id;
-        await updateResume(newPrimaryId, { is_primary: true });
-      }
+      await axios.delete(`http://localhost:5003/api/resumes/${id}`);
+      setResumes(prev => prev.filter(resume => resume._id !== id));
     } catch (err) {
-      console.error('Error deleting resume:', err);
+      console.error('Failed to delete resume:', err);
       throw err;
     }
   };
+
+  // Fetch resumes on component mount
+  useEffect(() => {
+    fetchResumes();
+  }, []);
 
   return {
     resumes,
@@ -144,5 +69,6 @@ export function useUserResumes() {
     createResume,
     updateResume,
     deleteResume,
+    fetchResumes
   };
-}
+};
