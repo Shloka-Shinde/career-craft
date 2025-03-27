@@ -1,176 +1,120 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import React, { useState } from 'react';
+import axios from 'axios';
 
 const JobPostForm = () => {
-  const { toast } = useToast();
-  const { user } = useAuth();
-  const navigate = useNavigate();
-  
-  const [jobTitle, setJobTitle] = useState("");
-  const [company, setCompany] = useState("");
-  const [location, setLocation] = useState("");
-  const [jobType, setJobType] = useState("");
-  const [salary, setSalary] = useState("");
-  const [description, setDescription] = useState("");
-  const [requirements, setRequirements] = useState("");
-  const [responsibilities, setResponsibilities] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    company: '',
+    location: '',
+    description: '',
+    salary: '',
+    contactEmail: ''
+  });
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prevState => ({
+      ...prevState,
+      [name]: value
+    }));
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    if (!user) {
-      toast({
-        title: "Authentication required",
-        description: "You must be logged in to post a job.",
-        variant: "destructive",
-      });
-      navigate("/auth");
-      return;
-    }
-    
-    setIsLoading(true);
-    
     try {
-      const formattedDescription = `
-        ${description}
-        
-        ## Responsibilities
-        ${responsibilities}
-        
-        ## Requirements
-        ${requirements}
-      `;
-      
-      const { error } = await supabase
-        .from("jobs")
-        .insert([
-          {
-            title: jobTitle,
-            company,
-            location,
-            job_type: jobType,
-            salary_range: salary,
-            description: formattedDescription,
-            requirements,
-            posted_by: user.id,
-          },
-        ]);
-
-      if (error) {
-        throw error;
-      }
-
-      toast({
-        title: "Job Posted",
-        description: "Your job listing has been posted successfully.",
+      const response = await axios.post('http://localhost:5003/api/jobposts', formData);
+      alert('Job Post Created Successfully!');
+      // Reset form after successful submission
+      setFormData({
+        title: '',
+        company: '',
+        location: '',
+        description: '',
+        salary: '',
+        contactEmail: ''
       });
-      
-      setJobTitle("");
-      setCompany("");
-      setLocation("");
-      setJobType("");
-      setSalary("");
-      setDescription("");
-      setRequirements("");
-      setResponsibilities("");
-      
-      navigate("/recruiter-dashboard");
     } catch (error) {
-      console.error("Error posting job:", error);
-      toast({
-        title: "Error posting job",
-        description: error.message || "An error occurred while posting the job.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
+      console.error('Error creating job post:', error);
+      alert('Failed to create job post');
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6 max-w-2xl mx-auto">
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Job Details</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="jobTitle">Job Title</Label>
-            <Input id="jobTitle" value={jobTitle} onChange={(e) => setJobTitle(e.target.value)} placeholder="Software Engineer" required />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="company">Company</Label>
-            <Input id="company" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="Company Name" required />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="location">Location</Label>
-            <Input id="location" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, State, or Remote" required />
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="jobType">Job Type</Label>
-            <Select required value={jobType} onValueChange={setJobType}>
-              <SelectTrigger id="jobType">
-                <SelectValue placeholder="Select job type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="full-time">Full-time</SelectItem>
-                <SelectItem value="part-time">Part-time</SelectItem>
-                <SelectItem value="contract">Contract</SelectItem>
-                <SelectItem value="remote">Remote</SelectItem>
-                <SelectItem value="internship">Internship</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="salary">Salary Range (Optional)</Label>
-            <Input id="salary" value={salary} onChange={(e) => setSalary(e.target.value)} placeholder="e.g., $60,000 - $80,000" />
-          </div>
+    <div className="max-w-md mx-auto mt-10 p-6 bg-white rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold mb-6 text-center">Create Job Post</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <input
+            type="text"
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            placeholder="Job Title"
+            required
+            className="w-full px-3 py-2 border rounded-md"
+          />
         </div>
-      </div>
-      
-      <div className="space-y-4">
-        <h2 className="text-xl font-semibold">Job Description</h2>
-        
-        <div className="space-y-2">
-          <Label htmlFor="description">Overview</Label>
-          <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Provide a detailed description of the job..." rows={4} required />
+        <div className="mb-4">
+          <input
+            type="text"
+            name="company"
+            value={formData.company}
+            onChange={handleChange}
+            placeholder="Company Name"
+            required
+            className="w-full px-3 py-2 border rounded-md"
+          />
         </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="responsibilities">Responsibilities</Label>
-          <Textarea id="responsibilities" value={responsibilities} onChange={(e) => setResponsibilities(e.target.value)} placeholder="List the key responsibilities for this position..." rows={4} required />
+        <div className="mb-4">
+          <input
+            type="text"
+            name="location"
+            value={formData.location}
+            onChange={handleChange}
+            placeholder="Job Location"
+            required
+            className="w-full px-3 py-2 border rounded-md"
+          />
         </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="requirements">Requirements</Label>
-          <Textarea id="requirements" value={requirements} onChange={(e) => setRequirements(e.target.value)} placeholder="List the skills, qualifications, and experience required..." rows={4} required />
+        <div className="mb-4">
+          <textarea
+            name="description"
+            value={formData.description}
+            onChange={handleChange}
+            placeholder="Job Description"
+            required
+            className="w-full px-3 py-2 border rounded-md h-32"
+          />
         </div>
-      </div>
-      
-      <div className="pt-4">
-        <Button type="submit" className="w-full md:w-auto" disabled={isLoading}>
-          {isLoading ? "Posting Job..." : "Post Job"}
-        </Button>
-      </div>
-    </form>
+        <div className="mb-4">
+          <input
+            type="number"
+            name="salary"
+            value={formData.salary}
+            onChange={handleChange}
+            placeholder="Salary (optional)"
+            className="w-full px-3 py-2 border rounded-md"
+          />
+        </div>
+        <div className="mb-4">
+          <input
+            type="email"
+            name="contactEmail"
+            value={formData.contactEmail}
+            onChange={handleChange}
+            placeholder="Contact Email"
+            required
+            className="w-full px-3 py-2 border rounded-md"
+          />
+        </div>
+        <button
+          type="submit"
+          className="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 transition-colors"
+        >
+          Submit Job Post
+        </button>
+      </form>
+    </div>
   );
 };
 

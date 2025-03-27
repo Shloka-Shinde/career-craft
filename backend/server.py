@@ -43,6 +43,67 @@ def get_data(category):
     category_data = df[df['category'] == category]
     response = category_data.to_dict(orient="records")
     return jsonify(response)
+@app.route('/api/mongodb/categories')
+def get_mongodb_categories():
 
+    try:
+
+        # Connect to MongoDB
+
+        client = MongoClient('mongodb://localhost:27017/ChaosCoders')
+
+        db = client['ChaosCoders']
+
+        collection = db['jobs_collection']
+
+        
+
+        # Get unique categories
+
+        categories = collection.distinct('category')
+
+        
+
+        return jsonify({'categories': categories})
+
+    except Exception as e:
+
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/mongodb/jobs/<category>')
+
+def get_mongodb_jobs_by_category(category):
+
+    try:
+
+        # Connect to MongoDB
+
+        client = MongoClient('mongodb://localhost:27017/ChaosCoders')
+
+        db = client['ChaosCoders']
+
+        collection = db['jobs_collection']
+
+        
+
+        # Find jobs in the specified category
+
+        jobs = list(collection.find({'category': category}))
+
+        
+
+        # Convert ObjectId to string
+
+        for job in jobs:
+
+            job['_id'] = str(job['_id'])
+
+        
+
+        return jsonify(jobs)
+
+    except Exception as e:
+
+        return jsonify({'error': str(e)}), 500
 if __name__ == '__main__':
     app.run(debug=True)
