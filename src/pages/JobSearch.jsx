@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JobCard from "@/components/JobCard";
-import { Search, MapPin, Filter, Calendar, BarChart3, Briefcase, Clock } from "lucide-react";
+import { X, Search, MapPin, Filter, Calendar, BarChart3, Briefcase, Clock, MailOpen, DollarSign } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,103 +21,159 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 
-// Mock job data
-const jobListings = [
-  {
-    id: "1",
-    title: "Senior Frontend Developer",
-    company: "TechCorp",
-    location: "San Francisco, CA",
-    type: "Full-time",
-    postedDate: "3 days ago",
-    description: "We're looking for a senior frontend developer with 5+ years of experience with React, TypeScript, and modern web technologies. You'll be responsible for building user interfaces for our enterprise products.",
-    salary: "$120K - $150K",
-    isNew: true,
-  },
-  {
-    id: "2",
-    title: "Product Manager",
-    company: "InnovateTech",
-    location: "New York, NY",
-    type: "Full-time",
-    postedDate: "1 week ago",
-    description: "Join our product team to drive the strategy and development of our SaaS platform. You'll work closely with engineering, design, and marketing to ensure we're building the right product.",
-    salary: "$110K - $140K",
-  },
-  {
-    id: "3",
-    title: "UX/UI Designer",
-    company: "DesignStudio",
-    location: "Remote",
-    type: "Remote",
-    postedDate: "2 days ago",
-    description: "We're seeking a skilled UX/UI designer to create beautiful, intuitive interfaces for our clients. You should have a strong portfolio and experience with Figma and design systems.",
-    salary: "$90K - $120K",
-    isNew: true,
-  },
-  {
-    id: "4",
-    title: "Data Scientist",
-    company: "DataWorks",
-    location: "Chicago, IL",
-    type: "Contract",
-    postedDate: "5 days ago",
-    description: "Help us extract insights from data using statistical methods and machine learning. You should be proficient in Python, SQL, and have experience with data visualization tools.",
-    salary: "$100K - $130K",
-  },
-  {
-    id: "5",
-    title: "DevOps Engineer",
-    company: "CloudTech",
-    location: "Austin, TX",
-    type: "Full-time",
-    postedDate: "1 week ago",
-    description: "We're looking for a DevOps engineer to help us build and maintain our cloud infrastructure. You should have experience with AWS, Kubernetes, and CI/CD pipelines.",
-    salary: "$110K - $140K",
-  },
-  {
-    id: "6",
-    title: "Marketing Specialist",
-    company: "GrowthCorp",
-    location: "Remote",
-    type: "Remote",
-    postedDate: "3 days ago",
-    description: "Join our marketing team to help drive growth and engagement. You should have experience with digital marketing, content creation, and analytics.",
-    salary: "$70K - $90K",
-    isNew: true,
-  },
-  {
-    id: "7",
-    title: "Backend Developer",
-    company: "ServerTech",
-    location: "Seattle, WA",
-    type: "Full-time",
-    postedDate: "2 weeks ago",
-    description: "We're seeking a backend developer with experience in Node.js, Express, and MongoDB. You'll be responsible for building and maintaining our API infrastructure.",
-    salary: "$100K - $130K",
-  },
-  {
-    id: "8",
-    title: "Customer Success Manager",
-    company: "SupportHQ",
-    location: "Denver, CO",
-    type: "Full-time",
-    postedDate: "4 days ago",
-    description: "Help our customers get the most value from our product. You should have excellent communication skills and a passion for customer service.",
-    salary: "$80K - $100K",
-  },
-];
+// Job Detail Placard Component
+const JobDetailPlacard = ({ jobData, onClose }) => {
+  if (!jobData) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+      <div className="bg-white rounded-lg p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+        {/* Close Button */}
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+        >
+          <X size={24} />
+        </button>
+
+        {/* Job Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold mb-2">{jobData.title}</h1>
+          <div className="flex items-center space-x-4 text-gray-600">
+            <div className="flex items-center space-x-2">
+              <Briefcase size={16} />
+              <span>{jobData.company}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <MapPin size={16} />
+              <span>{jobData.location || 'Remote'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Job Details Grid */}
+        <div className="grid md:grid-cols-3 gap-4 mb-6">
+          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
+            <Briefcase size={20} className="text-blue-500" />
+            <div>
+              <div className="text-sm text-gray-500">Job Type</div>
+              <div className="font-semibold">{jobData.category}</div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
+            <DollarSign size={20} className="text-green-500" />
+            <div>
+              <div className="text-sm text-gray-500">Salary</div>
+              <div className="font-semibold">{jobData.salary ? `$${jobData.salary}` : 'Competitive'}</div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
+            <Calendar size={20} className="text-purple-500" />
+            <div>
+              <div className="text-sm text-gray-500">Posted</div>
+              <div className="font-semibold">
+                {jobData.createdAt 
+                  ? new Date(jobData.createdAt).toLocaleDateString() 
+                  : 'Recently'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Job Description */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-3">Job Description</h2>
+          <p className="text-gray-700 leading-relaxed">{jobData.description}</p>
+        </div>
+
+        {/* Skills */}
+        {jobData.skills && jobData.skills.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-3">Required Skills</h2>
+            <div className="flex flex-wrap gap-2">
+              {jobData.skills.map((skill, index) => (
+                <Badge key={index} variant="secondary">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Contact Information */}
+        {jobData.contactEmail && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-3">Contact Information</h2>
+            <p className="text-gray-700">{jobData.contactEmail}</p>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex space-x-4">
+          <Button 
+            className="flex items-center space-x-2"
+            onClick={() => alert('Application feature coming soon!')}
+          >
+            <MailOpen size={16} />
+            <span>Apply Now</span>
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => alert('Saved to favorites!')}
+          >
+            Save Job
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const JobSearch = () => {
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [location, setLocation] = useState("");
   const [jobType, setJobType] = useState("");
+  const [selectedJob, setSelectedJob] = useState(null);
   const [datePosted, setDatePosted] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("");
   const [salary, setSalary] = useState("");
   
+  useEffect(() => {
+    const fetchJobs = async () => {
+      setLoading(true);
+      try {
+        // Hardcoded job data for demonstration
+        const jobData = [
+          {
+            "_id": "67e5d01d01913b52723fed96",
+            "title": "Python Developer",
+            "company": "Isha Data Solutions",
+            "location": "Remote",
+            "description": "Isha Data Solutions is seeking a skilled and passionate Python Developer to join our dynamic team. As a Python Developer, you will be responsible for designing, developing, and maintaining scalable applications and data-driven solutions. You will collaborate with cross-functional teams to build efficient and robust software systems that drive our business forward.",
+            "salary": 10000,
+            "contactEmail": "isha@gmail.com",
+            "category": "Full-time",
+            "skills": ["Python", "Django", "REST APIs"],
+            "createdAt": "2025-03-27T22:24:29.310Z"
+          }
+        ];
+        
+        setJobs(jobData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error fetching jobs", error);
+        setLoading(false);
+      }
+    };
+    fetchJobs();
+  }, []);
+  
   // Filter jobs based on search criteria
-  const filteredJobs = jobListings.filter((job) => {
+  const filteredJobs = jobs.filter((job) => {
     const matchesSearch = 
       job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
       job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -128,7 +185,7 @@ const JobSearch = () => {
       
     const matchesJobType = 
       jobType === "" || 
-      job.type.toLowerCase() === jobType.toLowerCase();
+      job.category.toLowerCase() === jobType.toLowerCase();
       
     return matchesSearch && matchesLocation && matchesJobType;
   });
@@ -140,6 +197,10 @@ const JobSearch = () => {
     setDatePosted("");
     setExperienceLevel("");
     setSalary("");
+  };
+
+  const handleJobClick = (job) => {
+    setSelectedJob(job);
   };
 
   return (
@@ -305,7 +366,7 @@ const JobSearch = () => {
               <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
                   <h2 className="text-xl font-semibold mb-1">
-                    {filteredJobs.length} job{filteredJobs.length !== 1 ? "s" : ""} found
+                    {loading ? "Loading..." : `${filteredJobs.length} job${filteredJobs.length !== 1 ? "s" : ""} found`}
                   </h2>
                   <div className="flex flex-wrap gap-2">
                     {searchTerm && (
@@ -342,10 +403,29 @@ const JobSearch = () => {
               </div>
               
               <div className="space-y-4">
-                {filteredJobs.length > 0 ? (
+                {loading ? (
+                  <div className="text-center py-12">
+                    <p className="text-muted-foreground">Loading jobs...</p>
+                  </div>
+                ) : filteredJobs.length > 0 ? (
                   filteredJobs.map((job, index) => (
-                    <div key={job.id} className="animate-slide-up" style={{ animationDelay: `${index * 0.05}s` }}>
-                      <JobCard {...job} />
+                    <div 
+                      key={job._id} 
+                      className="animate-slide-up cursor-pointer" 
+                      style={{ animationDelay: `${index * 0.05}s` }}
+                      onClick={() => handleJobClick(job)}
+                    >
+                      <JobCard 
+                        id={job._id}
+                        title={job.title}
+                        company={job.company}
+                        location={job.location || "Not specified"}
+                        type={job.category}
+                        postedDate={job.createdAt ? new Date(job.createdAt).toLocaleDateString() : "Recently"}
+                        description={job.description}
+                        salary={job.salary ? `$${job.salary}` : "Competitive"}
+                        isNew={true}
+                      />
                     </div>
                   ))
                 ) : (
@@ -358,7 +438,7 @@ const JobSearch = () => {
                 )}
               </div>
               
-              {filteredJobs.length > 0 && (
+              {!loading && filteredJobs.length > 0 && (
                 <div className="mt-8 flex justify-center">
                   <Button variant="outline">Load More Jobs</Button>
                 </div>
@@ -367,6 +447,14 @@ const JobSearch = () => {
           </div>
         </div>
       </main>
+      
+      {/* Job Detail Placard */}
+      {selectedJob && (
+        <JobDetailPlacard 
+          jobData={selectedJob} 
+          onClose={() => setSelectedJob(null)} 
+        />
+      )}
       
       <Footer />
     </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import { Button } from "@/components/ui/button";
@@ -17,40 +17,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
-// Mock data for job listings
-const jobListings = [
-  {
-    id: "1",
-    title: "Senior Frontend Developer",
-    location: "San Francisco, CA",
-    type: "Full-time",
-    datePosted: "September 15, 2023",
-    applicants: 24,
-    views: 187,
-    status: "Active",
-  },
-  {
-    id: "2",
-    title: "UX/UI Designer",
-    location: "Remote",
-    type: "Remote",
-    datePosted: "September 10, 2023",
-    applicants: 18,
-    views: 143,
-    status: "Active",
-  },
-  {
-    id: "3",
-    title: "Product Manager",
-    location: "New York, NY",
-    type: "Full-time",
-    datePosted: "August 28, 2023",
-    applicants: 32,
-    views: 256,
-    status: "Closed",
-  },
-];
 
 // Mock data for candidates
 const candidates = [
@@ -137,7 +103,28 @@ const analytics = {
 
 const RecruiterDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
-  
+  const [jobListings, setJobListings] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchJobListings = async () => {
+      try {
+        const response = await fetch('http://localhost:5003/api/jobposts');
+        if (!response.ok) {
+          throw new Error('Failed to fetch job listings');
+        }
+        const data = await response.json();
+        setJobListings(data);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Error fetching job listings:', error);
+        setIsLoading(false);
+      }
+    };
+
+    fetchJobListings();
+  }, []);
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
@@ -271,7 +258,9 @@ const RecruiterDashboard = () => {
                   </div>
                   
                   <div className="space-y-4">
-                    {jobListings.slice(0, 3).map((job) => (
+                    {isLoading ? (
+                      <div className="text-center text-muted-foreground">Loading job listings...</div>
+                    ) : jobListings.slice(0, 3).map((job) => (
                       <div key={job.id} className="flex flex-col md:flex-row justify-between p-4 border border-border rounded-lg hover:bg-secondary/20 transition-colors">
                         <div className="mb-4 md:mb-0">
                           <h4 className="font-medium mb-1">{job.title}</h4>
@@ -375,43 +364,51 @@ const RecruiterDashboard = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {jobListings.map((job) => (
-                        <tr key={job.id} className="border-b hover:bg-secondary/10">
-                          <td className="p-4">{job.title}</td>
-                          <td className="p-4">{job.location}</td>
-                          <td className="p-4">{job.type}</td>
-                          <td className="p-4">{job.datePosted}</td>
-                          <td className="p-4">
-                            <div className="flex items-center">
-                              <Users size={16} className="mr-2 text-muted-foreground" />
-                              {job.applicants}
-                            </div>
-                          </td>
-                          <td className="p-4">
-                            <Badge className={job.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
-                              {job.status}
-                            </Badge>
-                          </td>
-                          <td className="p-4">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  Actions
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem>View Details</DropdownMenuItem>
-                                <DropdownMenuItem>View Applicants</DropdownMenuItem>
-                                <DropdownMenuItem>Edit Job</DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-red-500">
-                                  {job.status === 'Active' ? 'Close Job' : 'Delete Job'}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                      {isLoading ? (
+                        <tr>
+                          <td colSpan="7" className="text-center p-4 text-muted-foreground">
+                            Loading job listings...
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        jobListings.map((job) => (
+                          <tr key={job.id} className="border-b hover:bg-secondary/10">
+                            <td className="p-4">{job.title}</td>
+                            <td className="p-4">{job.location}</td>
+                            <td className="p-4">{job.type}</td>
+                            <td className="p-4">{job.datePosted}</td>
+                            <td className="p-4">
+                              <div className="flex items-center">
+                                <Users size={16} className="mr-2 text-muted-foreground" />
+                                {job.applicants}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <Badge className={job.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                                {job.status}
+                              </Badge>
+                            </td>
+                            <td className="p-4">
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm">
+                                    Actions
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem>View Details</DropdownMenuItem>
+                                  <DropdownMenuItem>View Applicants</DropdownMenuItem>
+                                  <DropdownMenuItem>Edit Job</DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-red-500">
+                                    {job.status === 'Active' ? 'Close Job' : 'Delete Job'}
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
