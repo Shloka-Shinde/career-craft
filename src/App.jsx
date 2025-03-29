@@ -22,6 +22,8 @@ import JobPostForm from "./components/JobPostForm";
 import LiveData from "./pages/LiveData"
 import ResumeBuilder from "./components/ResumeBuilder.jsx"
 import ResumeList from "./pages/ResumeList.jsx";
+import JobSeekerDashboard from "./pages/JobSeekerDashboard.jsx"
+import SimCard from "./components/SimCard.jsx";
 
 // Create Query Client for React Query
 const queryClient = new QueryClient();
@@ -49,9 +51,15 @@ const App = () => (
             <Route path="/setup-profile" element={<SetupProfile />} />
             <Route path="/job-post-form" element={<JobPostForm />}  />
             <Route path="/job-post" element={<JobPost />}  />
+            <Route path="/job-seeker-dashboard" element={<JobSeekerDashboard />}  />
             <Route path="/candidate-profile" element={<CandidateProfile />} />
             <Route path="/resume-list" element={<ResumeList />} />
+  
             <Route path="/live-data" element={<LiveData />} />
+
+            <Route path="/sim-card" element={<SimCard />} />
+
+           
             <Route path="/resume-builder" element={<ResumeBuilder />} />
             <Route path="/forecast-chart" element={<ForecastChart />} /> {/* SARIMA Forecast Page */}
             <Route path="*" element={<NotFound />} /> {/* Catch-All 404 Page */}
