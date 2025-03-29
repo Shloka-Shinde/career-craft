@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Briefcase, Calendar, FileText, Clock, BookmarkPlus } from "lucide-react";
 import { InterviewCalendar } from "@/components/InterviewCalendar";
 import { ResumeBuilder } from "@/components/ResumeBuilder";
-
+import { Link } from "react-router-dom";
 const JobSeekerDashboard = () => {
   const { isAuthenticated, isLoading, user, isRecruiter } = useAuth();
   const [savedJobs, setSavedJobs] = useState([]);
@@ -197,7 +197,10 @@ const JobSeekerDashboard = () => {
                       <Briefcase className="h-16 w-16 mx-auto text-muted-foreground/50" />
                       <h3 className="mt-4 text-lg font-medium">No applications yet</h3>
                       <p className="mt-1 text-muted-foreground">Start applying to jobs to see them here.</p>
-                      <Button className="mt-4" size="sm">Browse Jobs</Button>
+                      <Button className="mt-4" size="sm" asChild>
+              <Link to="/jobs">Browse Jobs</Link>
+            </Button>
+                     
                     </div>
                   )}
                 </CardContent>
@@ -243,7 +246,9 @@ const JobSeekerDashboard = () => {
                       <BookmarkPlus className="h-16 w-16 mx-auto text-muted-foreground/50" />
                       <h3 className="mt-4 text-lg font-medium">No saved jobs</h3>
                       <p className="mt-1 text-muted-foreground">Save jobs you're interested in to apply later.</p>
-                      <Button className="mt-4" size="sm">Browse Jobs</Button>
+                      <Button className="mt-4" size="sm" asChild>
+              <Link to="/jobs">Browse Jobs</Link>
+            </Button>
                     </div>
                   )}
                 </CardContent>

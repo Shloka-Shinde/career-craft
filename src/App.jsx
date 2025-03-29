@@ -24,7 +24,7 @@ import ResumeBuilder from "./components/ResumeBuilder.jsx"
 import ResumeList from "./pages/ResumeList.jsx";
 import JobSeekerDashboard from "./pages/JobSeekerDashboard.jsx"
 import SimCard from "./components/SimCard.jsx";
-
+import LearningPathway from "./pages/LearningPathway";
 // Create Query Client for React Query
 const queryClient = new QueryClient();
 
@@ -44,12 +44,12 @@ const App = () => (
             <Route path="/post-job" element={<JobPost />} />
             <Route path="/interview-stats-chart" element={<InterviewStatsChart />} />
             <Route path="/category-forecast" element={<CategoryForecast />} />
-            <Route path="/recruiter-dashboard" element={<RecruiterDashboard />} />
+            
             <Route path="/job-post-form" element={<JobPostForm/>} />
             <Route path="/filter-sidebar" element={<FilterSidebar />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/setup-profile" element={<SetupProfile />} />
-            <Route path="/job-post-form" element={<JobPostForm />}  />
+            <Route path="/recruiter-dashboard" element={<RecruiterDashboard />}  />
             <Route path="/job-post" element={<JobPost />}  />
             <Route path="/job-seeker-dashboard" element={<JobSeekerDashboard />}  />
             <Route path="/candidate-profile" element={<CandidateProfile />} />
@@ -58,6 +58,7 @@ const App = () => (
             <Route path="/live-data" element={<LiveData />} />
 
             <Route path="/sim-card" element={<SimCard />} />
+            <Route path="/learning-pathway" element={<LearningPathway />} />
 
            
             <Route path="/resume-builder" element={<ResumeBuilder />} />

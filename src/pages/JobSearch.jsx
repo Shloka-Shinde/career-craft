@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JobCard from "@/components/JobCard";
-import { X, Search, MapPin, Filter, Calendar, BarChart3, Briefcase, Clock, MailOpen, DollarSign } from "lucide-react";
+import { Filter, Calendar, BarChart3, Briefcase, Clock } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -20,175 +19,141 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-
-// Job Detail Placard Component
-const JobDetailPlacard = ({ jobData, onClose }) => {
-  if (!jobData) {
-    return null;
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-      <div className="bg-white rounded-lg p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
-        {/* Close Button */}
-        <button 
-          onClick={onClose} 
-          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
-        >
-          <X size={24} />
-        </button>
-
-        {/* Job Header */}
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold mb-2">{jobData.title}</h1>
-          <div className="flex items-center space-x-4 text-gray-600">
-            <div className="flex items-center space-x-2">
-              <Briefcase size={16} />
-              <span>{jobData.company}</span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <MapPin size={16} />
-              <span>{jobData.location || 'Remote'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Job Details Grid */}
-        <div className="grid md:grid-cols-3 gap-4 mb-6">
-          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
-            <Briefcase size={20} className="text-blue-500" />
-            <div>
-              <div className="text-sm text-gray-500">Job Type</div>
-              <div className="font-semibold">{jobData.category}</div>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
-            <DollarSign size={20} className="text-green-500" />
-            <div>
-              <div className="text-sm text-gray-500">Salary</div>
-              <div className="font-semibold">{jobData.salary ? `$${jobData.salary}` : 'Competitive'}</div>
-            </div>
-          </div>
-          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
-            <Calendar size={20} className="text-purple-500" />
-            <div>
-              <div className="text-sm text-gray-500">Posted</div>
-              <div className="font-semibold">
-                {jobData.createdAt 
-                  ? new Date(jobData.createdAt).toLocaleDateString() 
-                  : 'Recently'}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Job Description */}
-        <div className="mb-6">
-          <h2 className="text-xl font-semibold mb-3">Job Description</h2>
-          <p className="text-gray-700 leading-relaxed">{jobData.description}</p>
-        </div>
-
-        {/* Skills */}
-        {jobData.skills && jobData.skills.length > 0 && (
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-3">Required Skills</h2>
-            <div className="flex flex-wrap gap-2">
-              {jobData.skills.map((skill, index) => (
-                <Badge key={index} variant="secondary">
-                  {skill}
-                </Badge>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Contact Information */}
-        {jobData.contactEmail && (
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold mb-3">Contact Information</h2>
-            <p className="text-gray-700">{jobData.contactEmail}</p>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex space-x-4">
-          <Button 
-            className="flex items-center space-x-2"
-            onClick={() => alert('Application feature coming soon!')}
-          >
-            <MailOpen size={16} />
-            <span>Apply Now</span>
-          </Button>
-          <Button 
-            variant="outline"
-            onClick={() => alert('Saved to favorites!')}
-          >
-            Save Job
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-};
+import { useToast } from "@/components/ui/use-toast";
+import { useSmartSearch } from "@/hooks/useSmartSearch";
+import { Loader2 } from "lucide-react";
 
 const JobSearch = () => {
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const { expandSearchKeywords, isExpanding } = useSmartSearch();
   const [searchTerm, setSearchTerm] = useState("");
   const [location, setLocation] = useState("");
   const [jobType, setJobType] = useState("");
-  const [selectedJob, setSelectedJob] = useState(null);
   const [datePosted, setDatePosted] = useState("");
   const [experienceLevel, setExperienceLevel] = useState("");
   const [salary, setSalary] = useState("");
-  
-  useEffect(() => {
-    const fetchJobs = async () => {
-      setLoading(true);
-      try {
-        // Hardcoded job data for demonstration
-        const jobData = [
-          {
-            "_id": "67e5d01d01913b52723fed96",
-            "title": "Python Developer",
-            "company": "Isha Data Solutions",
-            "location": "Remote",
-            "description": "Isha Data Solutions is seeking a skilled and passionate Python Developer to join our dynamic team. As a Python Developer, you will be responsible for designing, developing, and maintaining scalable applications and data-driven solutions. You will collaborate with cross-functional teams to build efficient and robust software systems that drive our business forward.",
-            "salary": 10000,
-            "contactEmail": "isha@gmail.com",
-            "category": "Full-time",
-            "skills": ["Python", "Django", "REST APIs"],
-            "createdAt": "2025-03-27T22:24:29.310Z"
-          }
-        ];
-        
-        setJobs(jobData);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching jobs", error);
-        setLoading(false);
+  const [jobListings, setJobListings] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [relatedKeywords, setRelatedKeywords] = useState([]);
+  const [expandedKeywords, setExpandedKeywords] = useState([]);
+
+  // Function to filter jobs client-side based on keywords
+  const filterJobsByKeywords = (jobs, keywords) => {
+    if (!keywords || keywords.length === 0) return jobs;
+    
+    return jobs.filter(job => {
+      // Check if any keyword is in the title, description, or company
+      return keywords.some(keyword => {
+        const keywordLower = keyword.toLowerCase();
+        const titleMatch = job.title?.toLowerCase().includes(keywordLower);
+        const descMatch = job.description?.toLowerCase().includes(keywordLower);
+        const companyMatch = job.company?.toLowerCase().includes(keywordLower);
+        return titleMatch || descMatch || companyMatch;
+      });
+    });
+  };
+
+  const fetchJobs = async (keywords = []) => {
+    try {
+      setIsLoading(true);
+      
+      // Store expanded keywords for client-side filtering
+      setExpandedKeywords([...keywords, searchTerm].filter(Boolean));
+      
+      // Base URL for the API
+      const url = "http://localhost:5003/api/jobposts";
+      
+      // Make API request
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
       }
-    };
+      
+      // Get all jobs from the API
+      let data = await response.json();
+      
+      // Filter jobs client-side based on all criteria
+      const allKeywords = [...keywords, searchTerm].filter(Boolean);
+      
+      // Apply keyword filtering if keywords exist
+      if (allKeywords.length > 0) {
+        data = filterJobsByKeywords(data, allKeywords);
+      }
+      
+      // Apply other filters
+      if (location) {
+        data = data.filter(job => 
+          job.location?.toLowerCase().includes(location.toLowerCase())
+        );
+      }
+      
+      if (jobType) {
+        data = data.filter(job => 
+          job.job_type?.toLowerCase() === jobType.toLowerCase()
+        );
+      }
+      
+      // Add isNew flag for jobs posted in the last 2 days
+      const twoDaysAgo = new Date();
+      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      
+      const jobsWithNewFlag = data.map(job => ({
+        ...job,
+        isNew: new Date(job.created_at) > twoDaysAgo
+      }));
+      
+      setJobListings(jobsWithNewFlag);
+    } catch (error) {
+      console.error('Error fetching jobs:', error);
+      toast({
+        title: "Search Error",
+        description: "Failed to fetch jobs. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSmartSearch = async () => {
+    if (!searchTerm) return;
+
+    try {
+      const keywords = await expandSearchKeywords(searchTerm);
+      setRelatedKeywords(keywords);
+      
+      console.log('Searching with keywords:', [searchTerm, ...keywords]);
+      
+      await fetchJobs(keywords);
+
+      if (keywords.length > 0) {
+        toast({
+          title: "Smart Search",
+          description: `Expanded search to include related keywords: ${keywords.join(', ')}`,
+        });
+      }
+    } catch (error) {
+      console.error('Smart search error:', error);
+      fetchJobs([searchTerm]); // At least search with the main term
+    }
+  };
+
+  useEffect(() => {
     fetchJobs();
+    
+    // Set up polling for new jobs instead of real-time subscription
+    const pollingInterval = setInterval(() => {
+      fetchJobs(relatedKeywords);
+    }, 60000); // Poll every minute
+    
+    return () => {
+      clearInterval(pollingInterval);
+    };
   }, []);
   
-  // Filter jobs based on search criteria
-  const filteredJobs = jobs.filter((job) => {
-    const matchesSearch = 
-      job.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-      job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.description.toLowerCase().includes(searchTerm.toLowerCase());
-      
-    const matchesLocation = 
-      location === "" || 
-      job.location.toLowerCase().includes(location.toLowerCase());
-      
-    const matchesJobType = 
-      jobType === "" || 
-      job.category.toLowerCase() === jobType.toLowerCase();
-      
-    return matchesSearch && matchesLocation && matchesJobType;
-  });
+  // No need for additional filtering since we're filtering in fetchJobs
+  const filteredJobs = jobListings;
   
   const clearFilters = () => {
     setSearchTerm("");
@@ -197,10 +162,17 @@ const JobSearch = () => {
     setDatePosted("");
     setExperienceLevel("");
     setSalary("");
+    setRelatedKeywords([]);
+    setExpandedKeywords([]);
+    fetchJobs();
   };
 
-  const handleJobClick = (job) => {
-    setSelectedJob(job);
+  const handleSearch = () => {
+    if (searchTerm) {
+      handleSmartSearch();
+    } else {
+      fetchJobs();
+    }
   };
 
   return (
@@ -214,41 +186,54 @@ const JobSearch = () => {
             <p className="text-muted-foreground">Browse through thousands of job listings and find your next opportunity</p>
           </div>
           
-          {/* Search Bar */}
           <div className="bg-white shadow-sm rounded-xl p-4 glass mb-8 animate-fade-in">
-            <form className="flex flex-col md:flex-row gap-3">
+            <form className="flex flex-col md:flex-row gap-3" onSubmit={(e) => {
+              e.preventDefault();
+              handleSearch();
+            }}>
               <div className="flex-grow">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input 
-                    type="text" 
-                    placeholder="Job title, keywords, or company" 
-                    className="pl-10 h-12"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
+                <Input 
+                  type="text" 
+                  placeholder="Job title, keywords, or company" 
+                  className="h-12"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
               </div>
-              <div className="md:w-1/3">
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                  <Input 
-                    type="text" 
-                    placeholder="Location" 
-                    className="pl-10 h-12"
-                    value={location}
-                    onChange={(e) => setLocation(e.target.value)}
-                  />
-                </div>
-              </div>
-              <Button type="submit" className="h-12 px-6">
-                Search Jobs
+              <Button 
+                type="submit" 
+                className="h-12 px-6"
+                disabled={isExpanding}
+              >
+                {isExpanding ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Expanding Search...
+                  </>
+                ) : (
+                  "Smart Search"
+                )}
               </Button>
             </form>
+
+            {relatedKeywords.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="bg-primary/20 text-primary px-2 py-1 rounded-full text-xs font-semibold">
+                  {searchTerm}
+                </span>
+                {relatedKeywords.map((keyword) => (
+                  <span 
+                    key={keyword} 
+                    className="bg-primary/10 text-primary px-2 py-1 rounded-full text-xs"
+                  >
+                    {keyword}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
           
           <div className="flex flex-col lg:flex-row gap-6">
-            {/* Filters Sidebar */}
             <div className="lg:w-1/4">
               <div className="bg-white rounded-xl shadow-sm glass p-6 animate-slide-up">
                 <div className="flex justify-between items-center mb-4">
@@ -280,7 +265,10 @@ const JobSearch = () => {
                             className={`flex items-center space-x-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
                               jobType === type.toLowerCase() ? "bg-primary/10 text-primary" : "hover:bg-accent"
                             }`}
-                            onClick={() => setJobType(type.toLowerCase())}
+                            onClick={() => {
+                              setJobType(jobType === type.toLowerCase() ? "" : type.toLowerCase());
+                              setTimeout(() => fetchJobs(relatedKeywords), 0);
+                            }}
                           >
                             <span className="text-sm">{type}</span>
                           </div>
@@ -303,7 +291,10 @@ const JobSearch = () => {
                             className={`flex items-center space-x-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
                               datePosted === date.toLowerCase() ? "bg-primary/10 text-primary" : "hover:bg-accent"
                             }`}
-                            onClick={() => setDatePosted(date.toLowerCase())}
+                            onClick={() => {
+                              setDatePosted(datePosted === date.toLowerCase() ? "" : date.toLowerCase());
+                              setTimeout(() => fetchJobs(relatedKeywords), 0);
+                            }}
                           >
                             <span className="text-sm">{date}</span>
                           </div>
@@ -326,7 +317,10 @@ const JobSearch = () => {
                             className={`flex items-center space-x-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
                               experienceLevel === exp.toLowerCase() ? "bg-primary/10 text-primary" : "hover:bg-accent"
                             }`}
-                            onClick={() => setExperienceLevel(exp.toLowerCase())}
+                            onClick={() => {
+                              setExperienceLevel(experienceLevel === exp.toLowerCase() ? "" : exp.toLowerCase());
+                              setTimeout(() => fetchJobs(relatedKeywords), 0);
+                            }}
                           >
                             <span className="text-sm">{exp}</span>
                           </div>
@@ -349,7 +343,10 @@ const JobSearch = () => {
                             className={`flex items-center space-x-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors ${
                               salary === sal.toLowerCase() ? "bg-primary/10 text-primary" : "hover:bg-accent"
                             }`}
-                            onClick={() => setSalary(sal.toLowerCase())}
+                            onClick={() => {
+                              setSalary(salary === sal.toLowerCase() ? "" : sal.toLowerCase());
+                              setTimeout(() => fetchJobs(relatedKeywords), 0);
+                            }}
                           >
                             <span className="text-sm">{sal}</span>
                           </div>
@@ -361,12 +358,11 @@ const JobSearch = () => {
               </div>
             </div>
             
-            {/* Job Listings */}
             <div className="lg:w-3/4">
               <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center">
                 <div>
                   <h2 className="text-xl font-semibold mb-1">
-                    {loading ? "Loading..." : `${filteredJobs.length} job${filteredJobs.length !== 1 ? "s" : ""} found`}
+                    {filteredJobs.length} job{filteredJobs.length !== 1 ? "s" : ""} found
                   </h2>
                   <div className="flex flex-wrap gap-2">
                     {searchTerm && (
@@ -402,43 +398,47 @@ const JobSearch = () => {
                 </div>
               </div>
               
-              <div className="space-y-4">
-                {loading ? (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">Loading jobs...</p>
-                  </div>
-                ) : filteredJobs.length > 0 ? (
-                  filteredJobs.map((job, index) => (
-                    <div 
-                      key={job._id} 
-                      className="animate-slide-up cursor-pointer" 
-                      style={{ animationDelay: `${index * 0.05}s` }}
-                      onClick={() => handleJobClick(job)}
-                    >
-                      <JobCard 
-                        id={job._id}
-                        title={job.title}
-                        company={job.company}
-                        location={job.location || "Not specified"}
-                        type={job.category}
-                        postedDate={job.createdAt ? new Date(job.createdAt).toLocaleDateString() : "Recently"}
-                        description={job.description}
-                        salary={job.salary ? `$${job.salary}` : "Competitive"}
-                        isNew={true}
-                      />
+              {isLoading ? (
+                <div className="space-y-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="rounded-xl p-6 animate-pulse bg-white/80 border">
+                      <div className="h-6 bg-muted rounded w-3/4 mb-4"></div>
+                      <div className="h-4 bg-muted rounded w-1/2 mb-3"></div>
+                      <div className="h-4 bg-muted rounded w-1/3 mb-6"></div>
+                      <div className="h-20 bg-muted rounded w-full"></div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-12">
-                    <p className="text-muted-foreground">No jobs match your search criteria. Try adjusting your filters.</p>
-                    <Button variant="outline" className="mt-4" onClick={clearFilters}>
-                      Clear all filters
-                    </Button>
-                  </div>
-                )}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {filteredJobs.length > 0 ? (
+                    filteredJobs.map((job, index) => (
+                      <div key={job.id} className="animate-slide-up" style={{ animationDelay: `${index * 0.05}s` }}>
+                        <JobCard 
+                          id={job.id}
+                          title={job.title || "Untitled Job"}
+                          company={job.company || "Unknown Company"}
+                          location={job.location || "Remote"}
+                          type={job.job_type || "Full-time"}
+                          postedDate={new Date(job.created_at).toLocaleDateString()}
+                          description={job.description || "No description provided"}
+                          salary={job.salary_range || "Salary not specified"}
+                          isNew={job.isNew}
+                        />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-12">
+                      <p className="text-muted-foreground">No jobs match your search criteria. Try adjusting your filters.</p>
+                      <Button variant="outline" className="mt-4" onClick={clearFilters}>
+                        Clear all filters
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
               
-              {!loading && filteredJobs.length > 0 && (
+              {filteredJobs.length > 0 && (
                 <div className="mt-8 flex justify-center">
                   <Button variant="outline">Load More Jobs</Button>
                 </div>
@@ -447,14 +447,6 @@ const JobSearch = () => {
           </div>
         </div>
       </main>
-      
-      {/* Job Detail Placard */}
-      {selectedJob && (
-        <JobDetailPlacard 
-          jobData={selectedJob} 
-          onClose={() => setSelectedJob(null)} 
-        />
-      )}
       
       <Footer />
     </div>

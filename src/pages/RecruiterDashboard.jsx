@@ -8,6 +8,7 @@ import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { BarChart3, Briefcase, Calendar, Clock, Eye, Filter, MessageCircle, Plus, Search, Star, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Link } from 'react-router-dom';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,9 +18,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import axios from "axios";
 
-// Mock data for candidates
-const candidates = [
+// Mock data for candidates (will be replaced with matched candidates)
+const initialCandidates = [
   {
     id: "1",
     name: "Emily Johnson",
@@ -104,26 +106,121 @@ const analytics = {
 const RecruiterDashboard = () => {
   const [activeTab, setActiveTab] = useState("overview");
   const [jobListings, setJobListings] = useState([]);
+  const [candidateMatches, setCandidateMatches] = useState([]);
+  const [resumes, setResumes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState(null);
+
+  // Function to normalize skills (copied from LiveData component)
+  const normalizeSkills = (skills) => {
+    if (Array.isArray(skills)) {
+      return skills.flatMap(skill => 
+        typeof skill === 'string' 
+          ? skill.split(',').map(s => s.trim().toLowerCase())
+          : []
+      );
+    }
+    
+    if (typeof skills === 'string') {
+      return skills.split(',').map(skill => skill.trim().toLowerCase());
+    }
+    
+    return [];
+  };
+
+  // Function to calculate similarity score (copied from LiveData component)
+  const calculateSimilarity = (jobSkills, resumeSkills) => {
+    if (!jobSkills || !resumeSkills) return 0;
+
+    const processedJobSkills = normalizeSkills(jobSkills);
+    const processedResumeSkills = normalizeSkills(resumeSkills);
+
+    const jobSet = new Set(processedJobSkills);
+    const resumeSet = new Set(processedResumeSkills);
+
+    const intersection = [...jobSet].filter((skill) => resumeSet.has(skill));
+    
+    return jobSet.size > 0 ? (intersection.length / jobSet.size) * 100 : 0;
+  };
+
+  // Function to find top matching candidates
+  const findMatchingCandidates = (job) => {
+    if (!job.skills || job.skills.length === 0 || !resumes || resumes.length === 0) {
+      return [];
+    }
+
+    return resumes
+      .map((resume) => {
+        const resumeSkills = resume.resume_data?.skills || [];
+        const similarity = calculateSimilarity(job.skills, resumeSkills);
+        
+        // Convert resume data to candidate format
+        return {
+          id: resume.id || `resume-${Math.random().toString(36).substr(2, 9)}`,
+          name: resume.resume_data?.personalInfo?.fullName || "Unknown Candidate",
+          title: resume.resume_data?.personalInfo?.title || "Candidate",
+          location: resume.resume_data?.personalInfo?.location || "Unknown Location",
+          appliedFor: job.title,
+          appliedDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+          status: "New",
+          skills: resumeSkills,
+          experience: resume.resume_data?.experience?.[0]?.years || "Unknown",
+          education: resume.resume_data?.education?.[0]?.degree || "Unknown Education",
+          rating: (similarity / 20).toFixed(1) > 5 ? 5 : (similarity / 20).toFixed(1),
+          avatar: "",
+          similarity: similarity.toFixed(1)
+        };
+      })
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, 5);
+  };
 
   useEffect(() => {
-    const fetchJobListings = async () => {
+    const fetchData = async () => {
+      setIsLoading(true);
       try {
-        const response = await fetch('http://localhost:5003/api/jobposts');
-        if (!response.ok) {
-          throw new Error('Failed to fetch job listings');
+        // Fetch both job listings and resumes
+        const [jobResponse, resumeResponse] = await Promise.all([
+          fetch('http://localhost:5003/api/jobposts'),
+          fetch('http://localhost:5003/api/resumes')
+        ]);
+
+        if (!jobResponse.ok || !resumeResponse.ok) {
+          throw new Error('Failed to fetch data');
         }
-        const data = await response.json();
-        setJobListings(data);
+
+        const jobData = await jobResponse.json();
+        const resumeData = await resumeResponse.json();
+
+        setJobListings(jobData);
+        setResumes(resumeData);
+        
+        // Select the first job by default to show matched candidates
+        if (jobData.length > 0) {
+          setSelectedJob(jobData[0]);
+          const matches = findMatchingCandidates(jobData[0]);
+          setCandidateMatches(matches.length > 0 ? matches : initialCandidates.slice(0, 3));
+        } else {
+          setCandidateMatches(initialCandidates.slice(0, 3));
+        }
+        
         setIsLoading(false);
       } catch (error) {
-        console.error('Error fetching job listings:', error);
+        console.error('Error fetching data:', error);
+        setCandidateMatches(initialCandidates.slice(0, 3));
         setIsLoading(false);
       }
     };
 
-    fetchJobListings();
+    fetchData();
   }, []);
+
+  // Handle job selection to update matched candidates
+  const handleJobSelect = (job) => {
+    setSelectedJob(job);
+    const matches = findMatchingCandidates(job);
+    setCandidateMatches(matches.length > 0 ? matches : initialCandidates.slice(0, 3));
+  };
 
   return (
     <div className="flex flex-col min-h-screen">
@@ -142,10 +239,13 @@ const RecruiterDashboard = () => {
                 <Users size={16} />
                 Candidates
               </Button>
-              <Button size="sm" className="flex items-center gap-2">
-                <Plus size={16} />
-                Post Job
-              </Button>
+              
+              <Link to="/job-post-form">
+  <Button size="sm" className="flex items-center gap-2">
+    <Plus size={16} />
+    Post Job
+  </Button>
+</Link>
             </div>
           </div>
           
@@ -261,7 +361,11 @@ const RecruiterDashboard = () => {
                     {isLoading ? (
                       <div className="text-center text-muted-foreground">Loading job listings...</div>
                     ) : jobListings.slice(0, 3).map((job) => (
-                      <div key={job.id} className="flex flex-col md:flex-row justify-between p-4 border border-border rounded-lg hover:bg-secondary/20 transition-colors">
+                      <div 
+                        key={job.id} 
+                        className={`flex flex-col md:flex-row justify-between p-4 border ${selectedJob && selectedJob.id === job.id ? 'border-primary bg-secondary/20' : 'border-border'} rounded-lg hover:bg-secondary/20 transition-colors cursor-pointer`}
+                        onClick={() => handleJobSelect(job)}
+                      >
                         <div className="mb-4 md:mb-0">
                           <h4 className="font-medium mb-1">{job.title}</h4>
                           <div className="flex flex-wrap items-center text-sm text-muted-foreground gap-3">
@@ -295,31 +399,38 @@ const RecruiterDashboard = () => {
                   </div>
                   
                   <div className="space-y-4">
-                    {candidates.slice(0, 3).map((candidate) => (
-                      <div key={candidate.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary/20 transition-colors">
-                        <div className="flex items-center">
-                          <Avatar className="h-10 w-10 mr-3">
-                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
-                            <AvatarFallback>{candidate.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h4 className="font-medium">{candidate.name}</h4>
-                            <p className="text-sm text-muted-foreground">Applied for {candidate.appliedFor}</p>
+                    {isLoading ? (
+                      <div className="text-center text-muted-foreground">Loading candidates...</div>
+                    ) : (
+                      candidateMatches.slice(0, 3).map((candidate) => (
+                        <div key={candidate.id} className="flex items-center justify-between p-4 border border-border rounded-lg hover:bg-secondary/20 transition-colors">
+                          <div className="flex items-center">
+                            <Avatar className="h-10 w-10 mr-3">
+                              <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                              <AvatarFallback>{candidate.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <h4 className="font-medium">{candidate.name}</h4>
+                              <p className="text-sm text-muted-foreground">Applied for {candidate.appliedFor}</p>
+                              {candidate.similarity && (
+                                <p className="text-xs text-green-600 font-medium">{candidate.similarity}% match</p>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2">
+                            <Badge className={
+                              candidate.status === 'New' ? 'bg-blue-100 text-blue-800' : 
+                              candidate.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
+                              'bg-amber-100 text-amber-800'
+                            }>
+                              {candidate.status}
+                            </Badge>
+                            <Button variant="outline" size="sm">View</Button>
                           </div>
                         </div>
-                        
-                        <div className="flex items-center gap-2">
-                          <Badge className={
-                            candidate.status === 'New' ? 'bg-blue-100 text-blue-800' : 
-                            candidate.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
-                            'bg-amber-100 text-amber-800'
-                          }>
-                            {candidate.status}
-                          </Badge>
-                          <Button variant="outline" size="sm">View</Button>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -372,7 +483,11 @@ const RecruiterDashboard = () => {
                         </tr>
                       ) : (
                         jobListings.map((job) => (
-                          <tr key={job.id} className="border-b hover:bg-secondary/10">
+                          <tr key={job.id} 
+                              className={`border-b hover:bg-secondary/10 ${selectedJob && selectedJob.id === job.id ? 'bg-secondary/20' : ''}`}
+                              onClick={() => handleJobSelect(job)}
+                              style={{ cursor: 'pointer' }}
+                          >
                             <td className="p-4">{job.title}</td>
                             <td className="p-4">{job.location}</td>
                             <td className="p-4">{job.type}</td>
@@ -440,96 +555,105 @@ const RecruiterDashboard = () => {
               </div>
               
               <div className="grid grid-cols-1 gap-4">
-                {candidates.map((candidate) => (
-                  <div key={candidate.id} className="glass rounded-xl p-6 hover:shadow-md transition-shadow">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
-                      <div className="flex items-start lg:items-center mb-4 lg:mb-0">
-                        <Avatar className="h-12 w-12 mr-4">
-                          <AvatarImage src={candidate.avatar} alt={candidate.name} />
-                          <AvatarFallback>{candidate.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-medium text-lg flex items-center">
-                            {candidate.name}
-                            <div className="ml-2 flex items-center">
-                              {[...Array(5)].map((_, i) => (
-                                <Star
-                                  key={i}
-                                  size={14}
-                                  className={i < Math.floor(candidate.rating) ? "text-yellow-400 fill-yellow-400" : i < candidate.rating ? "text-yellow-400 fill-yellow-400 opacity-50" : "text-gray-300"}
-                                />
-                              ))}
+                {isLoading ? (
+                  <div className="text-center text-muted-foreground p-8">Loading candidates...</div>
+                ) : (
+                  candidateMatches.map((candidate) => (
+                    <div key={candidate.id} className="glass rounded-xl p-6 hover:shadow-md transition-shadow">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
+                        <div className="flex items-start lg:items-center mb-4 lg:mb-0">
+                          <Avatar className="h-12 w-12 mr-4">
+                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                            <AvatarFallback>{candidate.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h4 className="font-medium text-lg flex items-center">
+                              {candidate.name}
+                              <div className="ml-2 flex items-center">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    size={14}
+                                    className={i < Math.floor(candidate.rating) ? "text-yellow-400 fill-yellow-400" : i < candidate.rating ? "text-yellow-400 fill-yellow-400 opacity-50" : "text-gray-300"}
+                                  />
+                                ))}
+                              </div>
+                            </h4>
+                            <p className="text-muted-foreground">{candidate.title}</p>
+                            <div className="flex items-center mt-1 text-sm">
+                              <Badge variant="outline" className="mr-2">
+                                {candidate.experience} exp
+                              </Badge>
+                              <span>{candidate.location}</span>
+                              {candidate.similarity && (
+                                <Badge className="ml-2 bg-green-100 text-green-800">
+                                  {candidate.similarity}% match
+                                </Badge>
+                              )}
                             </div>
-                          </h4>
-                          <p className="text-muted-foreground">{candidate.title}</p>
-                          <div className="flex items-center mt-1 text-sm">
-                            <Badge variant="outline" className="mr-2">
-                              {candidate.experience} exp
-                            </Badge>
-                            <span>{candidate.location}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Badge className={
+                            candidate.status === 'New' ? 'bg-blue-100 text-blue-800' : 
+                            candidate.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
+                            'bg-amber-100 text-amber-800'
+                          }>
+                            {candidate.status}
+                          </Badge>
+                          <div className="text-sm text-muted-foreground flex items-center">
+                            <Clock size={14} className="mr-1" />
+                            Applied {candidate.appliedDate}
                           </div>
                         </div>
                       </div>
                       
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Badge className={
-                          candidate.status === 'New' ? 'bg-blue-100 text-blue-800' : 
-                          candidate.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
-                          'bg-amber-100 text-amber-800'
-                        }>
-                          {candidate.status}
-                        </Badge>
-                        <div className="text-sm text-muted-foreground flex items-center">
-                          <Clock size={14} className="mr-1" />
-                          Applied {candidate.appliedDate}
+                      <Separator className="my-4" />
+                      
+                      <div className="mb-4">
+                        <div className="text-sm font-medium mb-2">Skills</div>
+                        <div className="flex flex-wrap gap-2">
+                          {(Array.isArray(candidate.skills) ? candidate.skills : []).map((skill, index) => (
+                            <Badge key={index} variant="secondary" className="font-normal">
+                              {skill}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm">
+                        <div>
+                          <div className="font-medium mb-1">Applied For</div>
+                          <div className="text-muted-foreground">{candidate.appliedFor}</div>
+                        </div>
+                        
+                        <div>
+                          <div className="font-medium mb-1">Education</div>
+                          <div className="text-muted-foreground">{candidate.education}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap justify-between items-center mt-4">
+                        <div className="text-sm text-muted-foreground">
+                          <Eye size={14} className="inline mr-1" /> Resume viewed 2 days ago
+                        </div>
+                        
+                        <div className="flex gap-2 mt-2 sm:mt-0">
+                          <Button variant="outline" size="sm" className="flex items-center gap-1">
+                            <MessageCircle size={14} />
+                            <span>Message</span>
+                          </Button>
+                          <Button variant="outline" size="sm" className="flex items-center gap-1">
+                            <Calendar size={14} />
+                            <span>Schedule Interview</span>
+                          </Button>
+                          <Button size="sm">View Profile</Button>
                         </div>
                       </div>
                     </div>
-                    
-                    <Separator className="my-4" />
-                    
-                    <div className="mb-4">
-                      <div className="text-sm font-medium mb-2">Skills</div>
-                      <div className="flex flex-wrap gap-2">
-                        {candidate.skills.map((skill) => (
-                          <Badge key={skill} variant="secondary" className="font-normal">
-                            {skill}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm">
-                      <div>
-                        <div className="font-medium mb-1">Applied For</div>
-                        <div className="text-muted-foreground">{candidate.appliedFor}</div>
-                      </div>
-                      
-                      <div>
-                        <div className="font-medium mb-1">Education</div>
-                        <div className="text-muted-foreground">{candidate.education}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap justify-between items-center mt-4">
-                      <div className="text-sm text-muted-foreground">
-                        <Eye size={14} className="inline mr-1" /> Resume viewed 2 days ago
-                      </div>
-                      
-                      <div className="flex gap-2 mt-2 sm:mt-0">
-                        <Button variant="outline" size="sm" className="flex items-center gap-1">
-                          <MessageCircle size={14} />
-                          <span>Message</span>
-                        </Button>
-                        <Button variant="outline" size="sm" className="flex items-center gap-1">
-                          <Calendar size={14} />
-                          <span>Schedule Interview</span>
-                        </Button>
-                        <Button size="sm">View Profile</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </TabsContent>
           </Tabs>

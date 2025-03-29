@@ -47,6 +47,23 @@ const Header = () => {
             Find Jobs
           </Link>
           
+          <Link 
+            to="/category-forecast" 
+            className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+          >
+            Category Forecast
+          </Link>
+          
+          {/* Learning Pathway - only for job seekers */}
+          {isAuthenticated && !isRecruiter && (
+            <Link 
+              to="/learning-pathway" 
+              className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
+            >
+              Learning Pathway
+            </Link>
+          )}
+          
           {isAuthenticated && !isRecruiter && (
             <Link 
               to="/job-seeker-dashboard" 
@@ -68,7 +85,7 @@ const Header = () => {
           <Link 
             to="/about" 
             className="text-sm font-medium text-foreground/80 hover:text-primary transition-colors"
-            >
+          >
             About
           </Link>
           <Link 
@@ -129,6 +146,23 @@ const Header = () => {
             >
               Find Jobs
             </Link>
+            
+            <Link 
+              to="/category-forecast" 
+              className="text-sm font-medium py-2 text-foreground/80 hover:text-primary transition-colors"
+            >
+              Category Forecast
+            </Link>
+            
+            {/* Learning Pathway - only for job seekers in mobile */}
+            {isAuthenticated && !isRecruiter && (
+              <Link 
+                to="/learning-pathway" 
+                className="text-sm font-medium py-2 text-foreground/80 hover:text-primary transition-colors"
+              >
+                Learning Pathway
+              </Link>
+            )}
             
             {isAuthenticated && !isRecruiter && (
               <Link 

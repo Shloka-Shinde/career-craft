@@ -43,12 +43,12 @@ const Index = () => {
               </p>
               
               <div className="flex flex-col md:flex-row gap-4 justify-center animate-slide-up" style={{ animationDelay: "0.2s" }}>
-                <Link to="/seeker-register">
+                <Link to="/auth">
                   <Button size="lg" className="w-full md:w-auto">
                     I'm a Job Seeker
                   </Button>
                 </Link>
-                <Link to="/recruiter-register">
+                <Link to="/auth">
                   <Button size="lg" variant="outline" className="w-full md:w-auto">
                     I'm a Recruiter
                   </Button>
@@ -228,7 +228,7 @@ const Index = () => {
                 </div>
                 
                 <div className="mt-8">
-                  <Link to="/seeker-register">
+                  <Link to="/auth">
                     <Button>Get Started as Job Seeker</Button>
                   </Link>
                 </div>
@@ -302,7 +302,7 @@ const Index = () => {
                 </div>
                 
                 <div className="mt-8">
-                  <Link to="/recruiter-register">
+                  <Link to="/auth">
                     <Button>Get Started as Recruiter</Button>
                   </Link>
                 </div>
@@ -317,16 +317,16 @@ const Index = () => {
             <h2 className="text-2xl md:text-3xl font-semibold mb-4">Join Our Platform Today</h2>
             <p className="text-lg mb-8 max-w-2xl mx-auto text-white/90">
               Whether you're looking for your next career opportunity or searching for top talent,
-              FreeFlowJobs provides the tools you need to succeed.
+              CareerCraft provides the tools you need to succeed.
             </p>
             
             <div className="flex flex-col md:flex-row justify-center gap-4">
-              <Link to="/seeker-register">
+              <Link to="/auth">
                 <Button variant="secondary" size="lg">
                   Sign Up as Job Seeker
                 </Button>
               </Link>
-              <Link to="/recruiter-register">
+              <Link to="/auth">
                 <Button variant="outline" size="lg" className="text-white border-white/30 hover:bg-white/10">
                   Sign Up as Recruiter
                 </Button>
