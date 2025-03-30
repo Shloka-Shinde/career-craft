@@ -1,75 +1,141 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 
-export const useUserResumes = () => {
+export function useUserResumes() {
+  const { user } = useAuth();
   const [resumes, setResumes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Fetch resumes
-  const fetchResumes = async () => {
-    try {
-      setIsLoading(true);
-      console.log("Fetching resumes...");
-      const response = await axios.get('http://localhost:5003/api/resumes');
-      console.log("Fetched resumes:", response.data);
-      setResumes(response.data);
-    } catch (err) {
-      console.error('Failed to fetch resumes:', err.response?.data || err.message);
-      setError(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Create a new resume
-  const createResume = async (resumeData) => {
-    try {
-      console.log("Creating resume:", resumeData);
-      const response = await axios.post('http://localhost:5003/api/resumes', resumeData);
-      console.log("Resume created:", response.data);
-      setResumes(prev => [...prev, response.data]);
-      return response.data;
-    } catch (err) {
-      console.error('Failed to create resume:', err.response?.data || err.message);
-      throw err;
-    }
-  };
-
-  // Update an existing resume
-  const updateResume = async (id, resumeData) => {
-    try {
-      console.log(`Updating resume (ID: ${id}):`, resumeData);
-      const response = await axios.put(`http://localhost:5003/api/resumes/${id}`, resumeData);
-      console.log("Resume updated:", response.data);
-      setResumes(prev => prev.map(resume => (resume._id === id ? response.data : resume)));
-      return response.data;
-    } catch (err) {
-      console.error(`Failed to update resume (ID: ${id}):`, err.response?.data || err.message);
-      throw err;
-    }
-  };
-
-  // Delete a resume
-  const deleteResume = async (id) => {
-    try {
-      if (!id) throw new Error("Invalid resume ID");
-      console.log("Deleting resume with ID:", id);
-      
-      const response = await axios.delete(`http://localhost:5003/api/resumes/${id}`);
-      console.log("Resume deleted successfully:", response.data);
-
-      setResumes(prev => prev.filter(resume => resume._id !== id));
-    } catch (err) {
-      console.error(`Failed to delete resume (ID: ${id}):`, err.response?.data || err.message);
-      throw err;
-    }
-  };
-
-  // Fetch resumes on component mount
   useEffect(() => {
+    if (!user) {
+      setResumes([]);
+      setIsLoading(false);
+      return;
+    }
+
+    const fetchResumes = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error: fetchError } = await supabase
+          .from('user_resumes')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('is_primary', { ascending: false })
+          .order('created_at', { ascending: false });
+
+        if (fetchError) throw fetchError;
+        setResumes(data || []);
+      } catch (err) {
+        console.error('Error fetching user resumes:', err);
+        setError(err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     fetchResumes();
-  }, []);
+  }, [user]);
+
+  const createResume = async (resume) => {
+    if (!user) throw new Error('User not authenticated');
+    
+    try {
+      if (resume.is_primary) {
+        await supabase
+          .from('user_resumes')
+          .update({ is_primary: false })
+          .eq('user_id', user.id)
+          .eq('is_primary', true);
+      } else if (resumes.length === 0) {
+        resume.is_primary = true;
+      }
+      
+      const { data, error } = await supabase
+        .from('user_resumes')
+        .insert({ ...resume, user_id: user.id })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      if (resume.is_primary) {
+        setResumes(prev => prev.map(r => ({ ...r, is_primary: r.id === data.id })));
+      } else {
+        setResumes(prev => [...prev, data]);
+      }
+      
+      return data;
+    } catch (err) {
+      console.error('Error creating resume:', err);
+      throw err;
+    }
+  };
+
+  const updateResume = async (id, updates) => {
+    if (!user) throw new Error('User not authenticated');
+    
+    try {
+      if (updates.is_primary) {
+        await supabase
+          .from('user_resumes')
+          .update({ is_primary: false })
+          .eq('user_id', user.id)
+          .eq('is_primary', true)
+          .neq('id', id);
+      }
+      
+      const { data, error } = await supabase
+        .from('user_resumes')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      setResumes(prev => {
+        return prev.map(r => {
+          if (r.id === id) return data;
+          if (updates.is_primary && r.is_primary) {
+            return { ...r, is_primary: false };
+          }
+          return r;
+        });
+      });
+      
+      return data;
+    } catch (err) {
+      console.error('Error updating resume:', err);
+      throw err;
+    }
+  };
+
+  const deleteResume = async (id) => {
+    if (!user) throw new Error('User not authenticated');
+    
+    try {
+      const resumeToDelete = resumes.find(r => r.id === id);
+      const { error } = await supabase
+        .from('user_resumes')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      const updatedResumes = resumes.filter(r => r.id !== id);
+      setResumes(updatedResumes);
+      
+      if (resumeToDelete?.is_primary && updatedResumes.length > 0) {
+        const newPrimaryId = updatedResumes[0].id;
+        await updateResume(newPrimaryId, { is_primary: true });
+      }
+    } catch (err) {
+      console.error('Error deleting resume:', err);
+      throw err;
+    }
+  };
 
   return {
     resumes,
@@ -78,6 +144,5 @@ export const useUserResumes = () => {
     createResume,
     updateResume,
     deleteResume,
-    fetchResumes
   };
-};
+}

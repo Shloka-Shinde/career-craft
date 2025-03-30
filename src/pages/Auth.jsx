@@ -95,7 +95,7 @@ const Auth = () => {
         <div className="w-full max-w-md px-4">
           <Card className="w-full">
             <CardHeader>
-              <CardTitle className="text-2xl font-bold text-center">Welcome to CareerCraft</CardTitle>
+              <CardTitle className="text-2xl font-bold text-center">Welcome to CareerCrafts</CardTitle>
               <CardDescription className="text-center">Sign in to your account or create a new one</CardDescription>
             </CardHeader>
 

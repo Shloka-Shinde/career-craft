@@ -127,7 +127,6 @@ const RecruiterDashboard = () => {
     
     return [];
   };
-
   // Function to calculate similarity score (copied from LiveData component)
   const calculateSimilarity = (jobSkills, resumeSkills) => {
     if (!jobSkills || !resumeSkills) return 0;

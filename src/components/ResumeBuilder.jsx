@@ -100,9 +100,11 @@ export const ResumeBuilder = () => {
       return { ...prev, [section]: currentItems };
     });
   };
-
   const saveResume = async () => {
     try {
+      // Log the full form state before saving
+      console.log('Full Form State:', JSON.stringify(formState, null, 2));
+  
       // Sanitize and prepare data
       const sanitizedData = {
         name: formState.name || 'Untitled Resume',
@@ -137,17 +139,18 @@ export const ResumeBuilder = () => {
           skills: formState.skills.filter(skill => skill.trim())
         }
       };
-
-      // Modify this part to handle new and existing resumes more robustly
-      if (selectedResume && selectedResume.id) {
-        // Updating an existing resume
+  
+      console.log('Sanitized Data:', JSON.stringify(sanitizedData, null, 2));
+  
+      if (selectedResume) {
+        // Existing code for updating resume
         await updateResume(selectedResume.id, sanitizedData);
         toast({
           title: 'Resume updated',
           description: 'Your resume has been successfully updated.'
         });
       } else {
-        // Creating a new resume
+        // Existing code for creating resume
         const newResume = await createResume(sanitizedData);
         setSelectedResumeId(newResume.id);
         toast({
@@ -156,17 +159,36 @@ export const ResumeBuilder = () => {
         });
       }
     } catch (error) {
-      // More detailed error handling
+      // Detailed error logging
       console.error('Full Error Object:', error);
       
-      const errorMessage = error.response?.data?.message 
-        || 'Failed to save your resume. Please check your data.';
-      
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
+      if (error.response) {
+        // The request was made and the server responded with a status code
+        console.error('Error Response Data:', error.response.data);
+        console.error('Error Response Status:', error.response.status);
+        
+        toast({
+          title: 'Error',
+          description: error.response.data.message || 'Failed to save your resume. Please check your data.',
+          variant: 'destructive'
+        });
+      } else if (error.request) {
+        // The request was made but no response was received
+        console.error('No response received:', error.request);
+        toast({
+          title: 'Network Error',
+          description: 'No response from server. Please check your internet connection.',
+          variant: 'destructive'
+        });
+      } else {
+        // Something happened in setting up the request
+        console.error('Error Message:', error.message);
+        toast({
+          title: 'Error',
+          description: 'An unexpected error occurred. Please try again.',
+          variant: 'destructive'
+        });
+      }
     }
   };
 
@@ -302,7 +324,7 @@ export const ResumeBuilder = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-8">
-                {/* Personal Information Section */}
+                {/* Personal Information */}
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold flex items-center gap-2">
                     <User className="h-5 w-5" /> Personal Information
@@ -367,7 +389,7 @@ export const ResumeBuilder = () => {
                   </div>
                 </div>
 
-                {/* Work Experience Section */}
+                {/* Work Experience */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -445,7 +467,7 @@ export const ResumeBuilder = () => {
                   ))}
                 </div>
 
-                {/* Education Section */}
+                {/* Education */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -515,7 +537,7 @@ export const ResumeBuilder = () => {
                   ))}
                 </div>
 
-                {/* Skills Section */}
+                {/* Skills */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold">Skills</h3>

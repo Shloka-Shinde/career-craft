@@ -1,21 +1,59 @@
-import React, { useState, useEffect } from "react";
-import axios from "axios";
-import { Search, Mail } from "lucide-react";
+import { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
+import { supabase } from '../SupabaseClient';
 
 const LiveData = () => {
   const [jobs, setJobs] = useState([]);
   const [resumes, setResumes] = useState([]);
+  const [latestResume, setLatestResume] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("");
-  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showResumeModal, setShowResumeModal] = useState(false);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [emailDetails, setEmailDetails] = useState({
-    to: "",
-    subject: "",
-    body: ""
-  });
+  const [user, setUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
+  // Initialize axios interceptors
+  useEffect(() => {
+    const interceptor = axios.interceptors.request.use(
+      async (config) => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          config.headers.Authorization = `Bearer ${session.access_token}`;
+        }
+        return config;
+      },
+      (error) => Promise.reject(error)
+    );
+
+    return () => axios.interceptors.request.eject(interceptor);
+  }, []);
+
+  // Check auth state and setup listener
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) throw error;
+        setUser(user);
+      } catch (error) {
+        console.error('Auth error:', error);
+      } finally {
+        setAuthLoading(false);
+      }
+    };
+
+    checkAuth();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        setUser(session?.user || null);
+      }
+    );
+
+    return () => subscription?.unsubscribe();
+  }, []);
+
+  // Normalize skills function
   const normalizeSkills = (skills) => {
     if (Array.isArray(skills)) {
       return skills.flatMap(skill => 
@@ -32,261 +70,176 @@ const LiveData = () => {
     return [];
   };
 
+  // Calculate similarity
   const calculateSimilarity = (jobSkills, resumeSkills) => {
     if (!jobSkills || !resumeSkills) return 0;
-
     const processedJobSkills = normalizeSkills(jobSkills);
     const processedResumeSkills = normalizeSkills(resumeSkills);
-
     const jobSet = new Set(processedJobSkills);
     const resumeSet = new Set(processedResumeSkills);
-
-    const intersection = [...jobSet].filter((skill) => resumeSet.has(skill));
-    
+    const intersection = [...jobSet].filter(skill => resumeSet.has(skill));
     return jobSet.size > 0 ? (intersection.length / jobSet.size) * 100 : 0;
   };
 
+  // Fetch latest resume with auth
+  const fetchLatestResume = useCallback(async () => {
+    try {
+      const response = await axios.get("http://localhost:5003/api/resumes");
+      if (response.data.length === 0) {
+        setLatestResume(null);
+        return null;
+      }
+      
+      const mostRecent = response.data.reduce((latest, current) => 
+        new Date(current.created_at) > new Date(latest.created_at) ? current : latest,
+        response.data[0]
+      );
+      
+      setLatestResume(mostRecent);
+      return mostRecent;
+    } catch (error) {
+      console.error('Fetch resume error:', error);
+      if (error.response?.status === 401) {
+        await supabase.auth.signOut();
+      }
+      return null;
+    }
+  }, []);
+
+  // Fetch all data with error handling
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const [jobResponse, resumeResponse] = await Promise.all([
+        const [jobsResponse, resumesResponse] = await Promise.all([
           axios.get("http://localhost:5003/api/jobposts"),
-          axios.get("http://localhost:5003/api/resumes"),
+          axios.get("http://localhost:5003/api/resumes")
         ]);
 
-        setJobs(jobResponse.data);
-        setResumes(resumeResponse.data);
-        setLoading(false);
+        setJobs(jobsResponse.data);
+        setResumes(resumesResponse.data);
+        
+        if (resumesResponse.data.length > 0) {
+          const mostRecent = resumesResponse.data.reduce((latest, current) => 
+            new Date(current.created_at) > new Date(latest.created_at) ? current : latest,
+            resumesResponse.data[0]
+          );
+          setLatestResume(mostRecent);
+        }
       } catch (error) {
-        console.error("Error fetching data", error);
+        console.error("Data fetch error:", error);
+        if (error.response?.status === 401) {
+          await supabase.auth.signOut();
+        }
+      } finally {
         setLoading(false);
       }
     };
+
     fetchData();
-  }, []);
+    const interval = setInterval(fetchLatestResume, 30000);
+    return () => clearInterval(interval);
+  }, [fetchLatestResume]);
 
-  const handleSendEmail = async (e) => {
-    e.preventDefault();
-    try {
-      const response = await axios.post('http://localhost:5003/api/send-email', {
-        to: emailDetails.to,
-        subject: emailDetails.subject,
-        body: emailDetails.body
-      }, {
-        // Add timeout and error logging
-        timeout: 10000,
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-  
-      console.log('Full server response:', response);
-      
-      if (response.data.success) {
-        alert('Email sent successfully!');
-        setShowEmailModal(false);
-      } else {
-        throw new Error(response.data.message || 'Unknown error occurred');
-      }
-    } catch (error) {
-      console.error('Detailed Error Information:');
-      console.error('Error Name:', error.name);
-      console.error('Error Message:', error.message);
-      
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        console.error('Error Response Data:', error.response.data);
-        console.error('Error Status:', error.response.status);
-        console.error('Error Headers:', error.response.headers);
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error('No response received:', error.request);
-      } else {
-        // Something happened in setting up the request
-        console.error('Error Setup:', error.message);
-      }
-  
-      alert(`Failed to send email: ${error.message}`);
-    }
-  };
-
-  const handleJobClick = (job) => {
-    if (!job.skills || job.skills.length === 0) {
+  // Handle job click
+  const handleJobClick = async (job) => {
+    const latest = await fetchLatestResume();
+    if (!job.skills?.length) {
       alert("No skills specified for this job.");
       return;
     }
-
-    const rankedResumes = resumes
-      .map((resume) => {
-        const resumeSkills = resume.resume_data.skills || [];
-        const similarity = calculateSimilarity(job.skills, resumeSkills);
-        return { 
-          ...resume, 
-          similarity,
-          resumeSkills: resumeSkills 
-        };
-      })
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, 5);
-
-    const recipientEmail = rankedResumes[0]?.resume_data?.personalInfo?.email || '';
-    
     setSelectedJob(job);
-    setEmailDetails({
-      to: recipientEmail,
-      subject: `Job Application: ${job.title} at ${job.company}`,
-      body: `I am interested in the ${job.title} position at ${job.company}.\n\nJob Description:\n${job.description}\n\nSkills Required: ${job.skills.join(', ')}`
-    });
-    setShowEmailModal(true);
-
-    alert(
-      rankedResumes.length > 0
-        ? rankedResumes.map((r) => `${r.resume_data.personalInfo.fullName}: ${r.similarity.toFixed(2)}% match (Skills: ${r.resumeSkills})`).join("\n")
-        : "No suitable resumes found."
-    );
+    setShowResumeModal(true);
   };
 
-  const categories = [...new Set(jobs.map((job) => job.category))];
+  // Handle sign out
+  const handleSignOut = async () => {
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      setUser(null);
+    } catch (error) {
+      console.error('Sign out error:', error);
+    }
+  };
 
-  const filteredJobs = jobs.filter((job) => {
-    const matchesSearchTerm =
-      job.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      job.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = selectedCategory ? job.category === selectedCategory : true;
-    return matchesSearchTerm && matchesCategory;
-  });
-
-  const JobCard = ({ job }) => (
-    <div
-      className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition-all duration-300 space-y-3 cursor-pointer"
-      onClick={() => handleJobClick(job)}
-    >
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold">{job.title}</h3>
-        <span className="text-sm text-gray-500">{job.category}</span>
-      </div>
-      <div className="text-sm text-gray-600">{job.company}</div>
-      <p className="text-sm text-gray-500 line-clamp-3">{job.description}</p>
-      <div className="flex flex-wrap gap-2 mt-2">
-        {job.skills && job.skills.map((skill, index) => (
-          <span 
-            key={index} 
-            className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full"
+  // Resume Modal Component
+  const ResumeModal = () => (
+    showResumeModal && latestResume && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div className="bg-white p-6 rounded-lg w-3/4 max-w-3xl max-h-[90vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">Latest Resume</h2>
+            <p className="text-sm text-gray-500">
+              Created: {new Date(latestResume.created_at).toLocaleDateString()}
+            </p>
+          </div>
+          <button
+            onClick={() => setShowResumeModal(false)}
+            className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
           >
-            {skill}
-          </span>
-        ))}
+            Close
+          </button>
+        </div>
       </div>
-    </div>
+    )
   );
 
-  const EmailModal = () => {
-    if (!showEmailModal) return null;
-
-    return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-        <div className="bg-white p-6 rounded-lg w-96 max-h-[90vh] overflow-y-auto">
-          <h2 className="text-xl font-bold mb-4">Send Job Application Email</h2>
-          <form onSubmit={handleSendEmail}>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Recipient Email
-              </label>
-              <input
-                type="email"
-                value={emailDetails.to}
-                onChange={(e) => setEmailDetails({...emailDetails, to: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-md"
-                placeholder="Enter recipient email"
-                required
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Subject
-              </label>
-              <input
-                type="text"
-                value={emailDetails.subject}
-                onChange={(e) => setEmailDetails({...emailDetails, subject: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-md"
-                required
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Body
-              </label>
-              <textarea
-                value={emailDetails.body}
-                onChange={(e) => setEmailDetails({...emailDetails, body: e.target.value})}
-                className="w-full p-2 border border-gray-300 rounded-md h-32"
-                required
-              />
-            </div>
-            <div className="flex justify-between">
-              <button
-                type="button"
-                onClick={() => setShowEmailModal(false)}
-                className="bg-gray-200 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-300"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600"
-              >
-                Send Email
-              </button>
-            </div>
-          </form>
+  // User Info Component
+  const UserInfo = () => {
+    if (authLoading) return <div className="text-right mb-4">Loading auth...</div>;
+    
+    return user ? (
+      <div className="flex justify-between items-center mb-4 bg-gray-100 p-3 rounded-lg">
+        <div>
+          <p className="font-medium">Logged in as: {user.email}</p>
+          <p className="text-sm text-gray-600">User ID: {user.id}</p>
         </div>
+        <button
+          onClick={handleSignOut}
+          className="px-3 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm"
+        >
+          Sign Out
+        </button>
+      </div>
+    ) : (
+      <div className="text-right mb-4">
+        <span className="text-gray-600">Not logged in</span>
       </div>
     );
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="mb-4 flex items-center space-x-4">
-        <div className="relative flex-grow">
-          <input
-            type="text"
-            placeholder="Search jobs..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-2 pl-10 border border-gray-300 rounded-md"
-          />
-          <Search className="absolute left-3 top-3 text-gray-400" />
-        </div>
-        <select
-          value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
-          className="p-2 border border-gray-300 rounded-md"
-        >
-          <option value="">All Categories</option>
-          {categories.map((category) => (
-            <option key={category} value={category}>
-              {category}
-            </option>
-          ))}
-        </select>
-      </div>
-
+      <UserInfo />
+      
       {loading ? (
-        <div className="text-center">Loading...</div>
-      ) : filteredJobs.length > 0 ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredJobs.map((job) => (
-            <JobCard key={job.id} job={job} />
-          ))}
+        <div className="flex justify-center items-center h-64">
+          <p>Loading data...</p>
         </div>
       ) : (
-        <div className="text-center text-gray-500">No jobs found</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {jobs.map(job => (
+            <div 
+              key={job.id} 
+              className="border p-4 rounded-lg hover:shadow-md cursor-pointer"
+              onClick={() => handleJobClick(job)}
+            >
+              <h3 className="font-bold text-lg">{job.title}</h3>
+              <p className="text-gray-600">{job.company}</p>
+              {latestResume && (
+                <div className="mt-2">
+                  <span className="text-sm font-medium">
+                    Match: {calculateSimilarity(job.skills, latestResume.resume_data?.skills).toFixed(0)}%
+                  </span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
-
-      <EmailModal />
+      
+      <ResumeModal />
     </div>
   );
 };

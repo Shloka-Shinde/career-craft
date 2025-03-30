@@ -4,7 +4,10 @@ import { Input } from "@/components/ui/input";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import JobCard from "@/components/JobCard";
-import { Filter, Calendar, BarChart3, Briefcase, Clock } from "lucide-react";
+import { 
+  Filter, Calendar, BarChart3, Briefcase, Clock, X, 
+  MapPin, MailOpen, DollarSign, Search, Loader2 
+} from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -21,7 +24,117 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/components/ui/use-toast";
 import { useSmartSearch } from "@/hooks/useSmartSearch";
-import { Loader2 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+
+// Job Detail Placard Component
+const JobDetailPlacard = ({ jobData, onClose }) => {
+  if (!jobData) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+      <div className="bg-white rounded-lg p-8 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+        {/* Close Button */}
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700"
+        >
+          <X size={24} />
+        </button>
+
+        {/* Job Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold mb-2">{jobData.title || "Untitled Job"}</h1>
+          <div className="flex items-center space-x-4 text-gray-600">
+            <div className="flex items-center space-x-2">
+              <Briefcase size={16} />
+              <span>{jobData.company || "Unknown Company"}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <MapPin size={16} />
+              <span>{jobData.location || 'Remote'}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Job Details Grid */}
+        <div className="grid md:grid-cols-3 gap-4 mb-6">
+          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
+            <Briefcase size={20} className="text-blue-500" />
+            <div>
+              <div className="text-sm text-gray-500">Job Type</div>
+              <div className="font-semibold">{jobData.job_type || "Full-time"}</div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
+            <DollarSign size={20} className="text-green-500" />
+            <div>
+              <div className="text-sm text-gray-500">Salary</div>
+              <div className="font-semibold">{jobData.salary_range || 'Competitive'}</div>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 bg-gray-100 p-3 rounded">
+            <Calendar size={20} className="text-purple-500" />
+            <div>
+              <div className="text-sm text-gray-500">Posted</div>
+              <div className="font-semibold">
+                {jobData.created_at 
+                  ? new Date(jobData.created_at).toLocaleDateString() 
+                  : 'Recently'}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Job Description */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-3">Job Description</h2>
+          <p className="text-gray-700 leading-relaxed">{jobData.description || "No description provided"}</p>
+        </div>
+
+        {/* Skills */}
+        {jobData.skills && jobData.skills.length > 0 && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-3">Required Skills</h2>
+            <div className="flex flex-wrap gap-2">
+              {jobData.skills.map((skill, index) => (
+                <Badge key={index} variant="secondary">
+                  {skill}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Contact Information */}
+        {jobData.contactEmail && (
+          <div className="mb-6">
+            <h2 className="text-xl font-semibold mb-3">Contact Information</h2>
+            <p className="text-gray-700">{jobData.contactEmail}</p>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div className="flex space-x-4">
+          <Button 
+            className="flex items-center space-x-2"
+            onClick={() => alert('Application feature coming soon!')}
+          >
+            <MailOpen size={16} />
+            <span>Apply Now</span>
+          </Button>
+          <Button 
+            variant="outline"
+            onClick={() => alert('Saved to favorites!')}
+          >
+            Save Job
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const JobSearch = () => {
   const { toast } = useToast();
@@ -36,6 +149,7 @@ const JobSearch = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [relatedKeywords, setRelatedKeywords] = useState([]);
   const [expandedKeywords, setExpandedKeywords] = useState([]);
+  const [selectedJob, setSelectedJob] = useState(null);
 
   // Function to filter jobs client-side based on keywords
   const filterJobsByKeywords = (jobs, keywords) => {
@@ -175,6 +289,10 @@ const JobSearch = () => {
     }
   };
 
+  const handleJobClick = (job) => {
+    setSelectedJob(job);
+  };
+
   return (
     <div className="flex flex-col min-h-screen">
       <Header />
@@ -192,13 +310,28 @@ const JobSearch = () => {
               handleSearch();
             }}>
               <div className="flex-grow">
-                <Input 
-                  type="text" 
-                  placeholder="Job title, keywords, or company" 
-                  className="h-12"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input 
+                    type="text" 
+                    placeholder="Job title, keywords, or company" 
+                    className="pl-10 h-12"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="md:w-1/3">
+                <div className="relative">
+                  <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input 
+                    type="text" 
+                    placeholder="Location" 
+                    className="pl-10 h-12"
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                  />
+                </div>
               </div>
               <Button 
                 type="submit" 
@@ -413,7 +546,12 @@ const JobSearch = () => {
                 <div className="space-y-4">
                   {filteredJobs.length > 0 ? (
                     filteredJobs.map((job, index) => (
-                      <div key={job.id} className="animate-slide-up" style={{ animationDelay: `${index * 0.05}s` }}>
+                      <div 
+                        key={job.id} 
+                        className="animate-slide-up cursor-pointer" 
+                        style={{ animationDelay: `${index * 0.05}s` }}
+                        onClick={() => handleJobClick(job)}
+                      >
                         <JobCard 
                           id={job.id}
                           title={job.title || "Untitled Job"}
@@ -447,6 +585,14 @@ const JobSearch = () => {
           </div>
         </div>
       </main>
+      
+      {/* Job Detail Placard */}
+      {selectedJob && (
+        <JobDetailPlacard 
+          jobData={selectedJob} 
+          onClose={() => setSelectedJob(null)} 
+        />
+      )}
       
       <Footer />
     </div>
