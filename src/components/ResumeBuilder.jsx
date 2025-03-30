@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -7,15 +7,22 @@ import { Textarea } from '@/components/ui/textarea';
 import { useUserResumes } from '@/hooks/use-user-resumes';
 import { useResumeTemplates } from '@/hooks/use-resume-templates';
 import { useToast } from '@/hooks/use-toast';
-import { Briefcase, GraduationCap, User, Mail, Phone, MapPin, Plus } from 'lucide-react';
+import { Briefcase, GraduationCap, User, Mail, Phone, MapPin, Plus, Github, Linkedin, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+
+
 
 export const ResumeBuilder = () => {
-  const { resumes, createResume, updateResume, deleteResume } = useUserResumes();
+  const { resumes, createResume, updateResume, deleteResume, analyzeProfiles, profileRating, isRatingLoading, clearProfileRating } = useUserResumes();
   const { templates, isLoading: isLoadingTemplates } = useResumeTemplates();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('edit');
   const [selectedResumeId, setSelectedResumeId] = useState(null);
+  const [showProfileAnalysis, setShowProfileAnalysis] = useState(false);
 
   // Find the primary resume or the first resume
   const primaryResume = resumes.find(r => r.is_primary) || resumes[0];
@@ -33,6 +40,8 @@ export const ResumeBuilder = () => {
       location: '',
       title: '',
       summary: '',
+      linkedinUrl: '',
+      githubUrl: '',
     },
     experience: [{ company: '', role: '', startDate: '', endDate: '', description: '' }],
     education: [{ institution: '', degree: '', year: '', description: '' }],
@@ -41,7 +50,7 @@ export const ResumeBuilder = () => {
   });
 
   // Update form state when selected resume changes
-  useEffect(() => {
+  React.useEffect(() => {
     if (selectedResume) {
       setFormState({
         name: selectedResume.name,
@@ -100,58 +109,35 @@ export const ResumeBuilder = () => {
       return { ...prev, [section]: currentItems };
     });
   };
+
   const saveResume = async () => {
     try {
-      // Log the full form state before saving
-      console.log('Full Form State:', JSON.stringify(formState, null, 2));
-  
-      // Sanitize and prepare data
-      const sanitizedData = {
-        name: formState.name || 'Untitled Resume',
-        is_primary: resumes.length === 0,
-        template_id: null,
-        resume_data: {
-          personalInfo: {
-            fullName: formState.personalInfo.fullName || '',
-            email: formState.personalInfo.email || '',
-            phone: formState.personalInfo.phone || '',
-            location: formState.personalInfo.location || '',
-            title: formState.personalInfo.title || '',
-            summary: formState.personalInfo.summary || ''
-          },
-          experience: formState.experience
-            .filter(exp => exp.company || exp.role)
-            .map(exp => ({
-              company: exp.company || '',
-              role: exp.role || '',
-              startDate: exp.startDate || '',
-              endDate: exp.endDate || '',
-              description: exp.description || ''
-            })),
-          education: formState.education
-            .filter(edu => edu.institution || edu.degree)
-            .map(edu => ({
-              institution: edu.institution || '',
-              degree: edu.degree || '',
-              year: edu.year || '',
-              description: edu.description || ''
-            })),
-          skills: formState.skills.filter(skill => skill.trim())
-        }
-      };
-  
-      console.log('Sanitized Data:', JSON.stringify(sanitizedData, null, 2));
-  
       if (selectedResume) {
-        // Existing code for updating resume
-        await updateResume(selectedResume.id, sanitizedData);
+        await updateResume(selectedResume.id, {
+          name: formState.name,
+          resume_data: {
+            personalInfo: formState.personalInfo,
+            experience: formState.experience,
+            education: formState.education,
+            skills: formState.skills,
+          }
+        });
         toast({
           title: 'Resume updated',
           description: 'Your resume has been successfully updated.'
         });
       } else {
-        // Existing code for creating resume
-        const newResume = await createResume(sanitizedData);
+        const newResume = await createResume({
+          name: formState.name,
+          resume_data: {
+            personalInfo: formState.personalInfo,
+            experience: formState.experience,
+            education: formState.education,
+            skills: formState.skills,
+          },
+          is_primary: resumes.length === 0, // Make primary if first resume
+          template_id: null
+        });
         setSelectedResumeId(newResume.id);
         toast({
           title: 'Resume created',
@@ -159,36 +145,12 @@ export const ResumeBuilder = () => {
         });
       }
     } catch (error) {
-      // Detailed error logging
-      console.error('Full Error Object:', error);
-      
-      if (error.response) {
-        // The request was made and the server responded with a status code
-        console.error('Error Response Data:', error.response.data);
-        console.error('Error Response Status:', error.response.status);
-        
-        toast({
-          title: 'Error',
-          description: error.response.data.message || 'Failed to save your resume. Please check your data.',
-          variant: 'destructive'
-        });
-      } else if (error.request) {
-        // The request was made but no response was received
-        console.error('No response received:', error.request);
-        toast({
-          title: 'Network Error',
-          description: 'No response from server. Please check your internet connection.',
-          variant: 'destructive'
-        });
-      } else {
-        // Something happened in setting up the request
-        console.error('Error Message:', error.message);
-        toast({
-          title: 'Error',
-          description: 'An unexpected error occurred. Please try again.',
-          variant: 'destructive'
-        });
-      }
+      console.error('Error saving resume:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save your resume. Please try again.',
+        variant: 'destructive'
+      });
     }
   };
 
@@ -240,12 +202,124 @@ export const ResumeBuilder = () => {
         location: '',
         title: '',
         summary: '',
+        linkedinUrl: '',
+        githubUrl: '',
       },
       experience: [{ company: '', role: '', startDate: '', endDate: '', description: '' }],
       education: [{ institution: '', degree: '', year: '', description: '' }],
       skills: [''],
     });
     setActiveTab('edit');
+    clearProfileRating();
+    setShowProfileAnalysis(false);
+  };
+
+  const handleAnalyzeProfiles = async () => {
+    const { linkedinUrl, githubUrl } = formState.personalInfo;
+    
+    if (!linkedinUrl && !githubUrl) {
+      toast({
+        title: 'Missing information',
+        description: 'Please provide at least one profile URL (LinkedIn or GitHub)',
+        variant: 'destructive'
+      });
+      return;
+    }
+    
+    try {
+      await analyzeProfiles(linkedinUrl || '', githubUrl || '');
+      setShowProfileAnalysis(true);
+      toast({
+        title: 'Analysis complete',
+        description: 'Your profiles have been successfully analyzed.'
+      });
+    } catch (error) {
+      console.error('Error analyzing profiles:', error);
+      toast({
+        title: 'Analysis failed',
+        description: 'There was a problem analyzing your profiles. Please try again later.',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  const renderScoreIndicator = (score) => {
+    return (
+      <div className="flex items-center gap-2">
+        <Progress value={score * 10} className="h-2 flex-1" />
+        <span className="text-sm font-medium">{score}/10</span>
+      </div>
+    );
+  };
+
+  const renderProfileAnalysis = () => {
+    if (!profileRating) return null;
+    
+    return (
+      <Card className="mt-6 border-l-4 border-l-primary">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            Profile Analysis
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label>Overall Score</Label>
+                {renderScoreIndicator(profileRating.overall_score)}
+              </div>
+              <div className="flex justify-between items-center">
+                <Label>Skills Match</Label>
+                {renderScoreIndicator(profileRating.skills_match)}
+              </div>
+              <div className="flex justify-between items-center">
+                <Label>Experience Rating</Label>
+                {renderScoreIndicator(profileRating.experience_rating)}
+              </div>
+            </div>
+
+            <Separator />
+
+            <Accordion type="single" collapsible className="w-full">
+              <AccordionItem value="strengths">
+                <AccordionTrigger className="text-green-600 font-medium">Key Strengths</AccordionTrigger>
+                <AccordionContent>
+                  <ul className="space-y-2 list-disc pl-5">
+                    {profileRating.strengths.map((strength, index) => (
+                      <li key={index} className="text-sm">{strength}</li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+              
+              <AccordionItem value="improve">
+                <AccordionTrigger className="text-amber-600 font-medium">Areas to Improve</AccordionTrigger>
+                <AccordionContent>
+                  <ul className="space-y-2 list-disc pl-5">
+                    {profileRating.areas_to_improve.map((area, index) => (
+                      <li key={index} className="text-sm">{area}</li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+              
+              <AccordionItem value="recommendations">
+                <AccordionTrigger className="text-blue-600 font-medium">Recommendations</AccordionTrigger>
+                <AccordionContent>
+                  <ul className="space-y-2 list-disc pl-5">
+                    {profileRating.recommendations.map((rec, index) => (
+                      <li key={index} className="text-sm">{rec}</li>
+                    ))}
+                  </ul>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
+          </div>
+        </CardContent>
+      </Card>
+    );
   };
 
   return (
@@ -385,6 +459,54 @@ export const ResumeBuilder = () => {
                         placeholder="A brief summary of your professional background and goals"
                         rows={4}
                       />
+                    </div>
+                    
+                    {/* New Online Profiles Section */}
+                    <div className="space-y-2 md:col-span-2">
+                      <Label className="font-semibold text-base">Online Profiles</Label>
+                      <div className="space-y-4 pt-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="linkedin" className="flex items-center gap-2">
+                            <Linkedin className="h-4 w-4" /> LinkedIn Profile URL
+                          </Label>
+                          <Input 
+                            id="linkedin" 
+                            value={formState.personalInfo.linkedinUrl || ''}
+                            onChange={(e) => handleInputChange('personalInfo', 'linkedinUrl', e.target.value)}
+                            placeholder="https://www.linkedin.com/in/username"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="github" className="flex items-center gap-2">
+                            <Github className="h-4 w-4" /> GitHub Profile URL
+                          </Label>
+                          <Input 
+                            id="github" 
+                            value={formState.personalInfo.githubUrl || ''}
+                            onChange={(e) => handleInputChange('personalInfo', 'githubUrl', e.target.value)}
+                            placeholder="https://github.com/username"
+                          />
+                        </div>
+                        
+                        <div className="flex justify-end">
+                          <Button 
+                            type="button" 
+                            onClick={handleAnalyzeProfiles}
+                            disabled={isRatingLoading}
+                            className="flex items-center gap-2"
+                          >
+                            {isRatingLoading ? 'Analyzing...' : 'Analyze Profiles'}
+                            {isRatingLoading ? (
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                            ) : (
+                              <AlertCircle className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                        
+                        {/* Profile Analysis Results */}
+                        {showProfileAnalysis && renderProfileAnalysis()}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -627,6 +749,35 @@ const ResumePreview = ({ resume }) => {
             </div>
           )}
         </div>
+        
+        {/* Social Profiles */}
+        {(resume.personalInfo.linkedinUrl || resume.personalInfo.githubUrl) && (
+          <div className="flex justify-center gap-3 mt-3">
+            {resume.personalInfo.linkedinUrl && (
+              <a 
+                href={resume.personalInfo.linkedinUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-sm text-blue-600 hover:underline"
+              >
+                <Linkedin className="h-3.5 w-3.5" />
+                <span>LinkedIn</span>
+              </a>
+            )}
+            
+            {resume.personalInfo.githubUrl && (
+              <a 
+                href={resume.personalInfo.githubUrl} 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-sm text-gray-700 hover:underline"
+              >
+                <Github className="h-3.5 w-3.5" />
+                <span>GitHub</span>
+              </a>
+            )}
+          </div>
+        )}
       </div>
       
       {/* Summary */}
@@ -705,5 +856,4 @@ const ResumePreview = ({ resume }) => {
     </div>
   );
 };
-
 export default ResumeBuilder;

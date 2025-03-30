@@ -7,6 +7,8 @@ export function useUserResumes() {
   const [resumes, setResumes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [profileRating, setProfileRating] = useState(null);
+  const [isRatingLoading, setIsRatingLoading] = useState(false);
 
   useEffect(() => {
     if (!user) {
@@ -29,7 +31,7 @@ export function useUserResumes() {
         setResumes(data || []);
       } catch (err) {
         console.error('Error fetching user resumes:', err);
-        setError(err);
+        setError(err instanceof Error ? err : new Error('Failed to fetch user resumes'));
       } finally {
         setIsLoading(false);
       }
@@ -96,13 +98,14 @@ export function useUserResumes() {
       if (error) throw error;
       
       setResumes(prev => {
-        return prev.map(r => {
+        const updated = prev.map(r => {
           if (r.id === id) return data;
           if (updates.is_primary && r.is_primary) {
             return { ...r, is_primary: false };
           }
           return r;
         });
+        return updated;
       });
       
       return data;
@@ -137,6 +140,28 @@ export function useUserResumes() {
     }
   };
 
+  const analyzeProfiles = async (linkedinUrl, githubUrl) => {
+    if (!user) throw new Error('User not authenticated');
+    
+    try {
+      setIsRatingLoading(true);
+      
+      const { data, error } = await supabase.functions.invoke('analyze-profiles', {
+        body: { linkedinUrl, githubUrl }
+      });
+
+      if (error) throw error;
+      
+      setProfileRating(data.rating);
+      return data.rating;
+    } catch (err) {
+      console.error('Error analyzing profiles:', err);
+      throw err;
+    } finally {
+      setIsRatingLoading(false);
+    }
+  };
+
   return {
     resumes,
     isLoading,
@@ -144,5 +169,9 @@ export function useUserResumes() {
     createResume,
     updateResume,
     deleteResume,
+    analyzeProfiles,
+    profileRating,
+    isRatingLoading,
+    clearProfileRating: () => setProfileRating(null)
   };
 }
