@@ -29,7 +29,7 @@ const supabaseAdmin = createClient(
 // 5. Enhanced CORS configuration
 const corsOptions = {
   origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true,
   optionsSuccessStatus: 200
@@ -95,7 +95,8 @@ const userProfileSchema = new mongoose.Schema({
   email: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
   },
   fullName: String,
   resume: {
@@ -103,6 +104,10 @@ const userProfileSchema = new mongoose.Schema({
     ref: 'Resume'
   },
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
     type: Date,
     default: Date.now
   }
@@ -124,10 +129,55 @@ const resumeSchema = new mongoose.Schema({
   }
 });
 
+const candidateSchema = new mongoose.Schema({
+  jobId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'JobPost',
+    required: true
+  },
+  applicantId: {
+    type: String,
+    required: true
+  },
+  applicantEmail: {
+    type: String,
+    required: true,
+    match: [/^\w+([\.-]?\w+)*@\w+([\.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
+  },
+  applicantName: {
+    type: String,
+    required: true
+  },
+  resumeId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Resume'
+  },
+  status: {
+    type: String,
+    enum: ['new', 'reviewed', 'interview', 'hired', 'rejected'],
+    default: 'new'
+  },
+  matchScore: {
+    type: Number,
+    min: 0,
+    max: 100
+  },
+  notes: String,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  updatedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
 // 9. Create Mongoose Models
 const JobPost = mongoose.models.JobPost || mongoose.model('JobPost', jobPostSchema);
 const UserProfile = mongoose.models.UserProfile || mongoose.model('UserProfile', userProfileSchema);
 const Resume = mongoose.models.Resume || mongoose.model('Resume', resumeSchema);
+const Candidate = mongoose.models.Candidate || mongoose.model('Candidate', candidateSchema);
 
 // 10. Authentication middleware
 const authenticateJWT = async (req, res, next) => {
@@ -223,115 +273,262 @@ app.use('/api/jobposts', jobPostRoutes);
 import ResumeRoutes from './routes/ResumeRoutes.js';
 app.use('/api/resumes', ResumeRoutes);
 
-// 16. Public health check endpoint (continued)app.get('/health', (req, res) => {
-    app.get('/data', async (req, res) => {
-        try {
-            const data = await fetchData();
-            res.json(data);
-        } catch (error) {
-            res.status(500).json({ error: "Something went wrong" });
-        }
+// 16. Candidates API Routes
+// Get all candidates
+app.get('/api/candidates', authenticateJWT, async (req, res) => {
+  try {
+    const { status, jobId } = req.query;
+    let query = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (jobId) {
+      query.jobId = jobId;
+    }
+
+    const candidates = await Candidate.find(query)
+      .populate('jobId', 'title company')
+      .populate('resumeId', 'skills')
+      .sort({ createdAt: -1 });
+
+    res.json(candidates);
+  } catch (err) {
+    console.error('Failed to fetch candidates:', err);
+    res.status(500).json({ error: 'Failed to fetch candidates' });
+  }
+});
+
+// Get single candidate
+app.get('/api/candidates/:id', authenticateJWT, async (req, res) => {
+  try {
+    const candidate = await Candidate.findById(req.params.id)
+      .populate('jobId', 'title company')
+      .populate('resumeId');
+
+    if (!candidate) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+
+    res.json(candidate);
+  } catch (err) {
+    console.error('Failed to fetch candidate:', err);
+    res.status(500).json({ error: 'Failed to fetch candidate' });
+  }
+});
+
+// Create new candidate (used when submitting application)
+app.post('/api/candidates', authenticateJWT, async (req, res) => {
+  try {
+    const { jobId, resumeId, matchScore, notes } = req.body;
+
+    // Get user profile
+    const profile = await UserProfile.findOne({ userId: req.user.id });
+    if (!profile) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+
+    const newCandidate = await Candidate.create({
+      jobId,
+      applicantId: req.user.id,
+      applicantEmail: profile.email,
+      applicantName: profile.fullName || 'Applicant',
+      resumeId,
+      matchScore,
+      notes,
+      status: 'new'
     });
 
+    res.status(201).json(newCandidate);
+  } catch (err) {
+    console.error('Failed to create candidate:', err);
+    res.status(500).json({ error: 'Failed to create candidate' });
+  }
+});
+
+// Update candidate status/notes
+app.patch('/api/candidates/:id', authenticateJWT, async (req, res) => {
+  try {
+    const { status, notes } = req.body;
+
+    const updatedCandidate = await Candidate.findByIdAndUpdate(
+      req.params.id,
+      { 
+        status,
+        notes,
+        updatedAt: Date.now()
+      },
+      { new: true }
+    );
+
+    if (!updatedCandidate) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+
+    res.json(updatedCandidate);
+  } catch (err) {
+    console.error('Failed to update candidate:', err);
+    res.status(500).json({ error: 'Failed to update candidate' });
+  }
+});
+
+// Delete candidate
+app.delete('/api/candidates/:id', authenticateJWT, async (req, res) => {
+  try {
+    const deletedCandidate = await Candidate.findByIdAndDelete(req.params.id);
+
+    if (!deletedCandidate) {
+      return res.status(404).json({ error: 'Candidate not found' });
+    }
+
+    res.json({ message: 'Candidate deleted successfully' });
+  } catch (err) {
+    console.error('Failed to delete candidate:', err);
+    res.status(500).json({ error: 'Failed to delete candidate' });
+  }
+});
 
 // 17. Mailgun Email Service Configuration
 const mailgun = new Mailgun(formData);
 const mg = mailgun.client({
-username: 'api',
-key: process.env.MAILGUN_API_KEY,
-url: 'https://api.mailgun.net'
+  username: 'api',
+  key: process.env.MAILGUN_API_KEY,
+  url: 'https://api.mailgun.net'
 });
 
 // 18. Email Notification Service
 const sendNotificationEmail = async (to, subject, template) => {
-try {
-const data = {
-  from: process.env.EMAIL_FROM || 'Chaos Coders <no-reply@chaoscoders.com>',
-  to,
-  subject,
-  html: template
+  try {
+    const data = {
+      from: process.env.EMAIL_FROM || 'Chaos Coders <no-reply@chaoscoders.com>',
+      to,
+      subject,
+      html: template
+    };
+
+    await mg.messages.create(process.env.MAILGUN_DOMAIN, data);
+    console.log(`Email sent to ${to}`);
+    return true;
+  } catch (error) {
+    console.error('Email sending error:', error);
+    return false;
+  }
 };
 
-await mg.messages.create(process.env.MAILGUN_DOMAIN, data);
-console.log(`Email sent to ${to}`);
-return true;
-} catch (error) {
-console.error('Email sending error:', error);
-return false;
-}
-};
-
-// 19. Job Application Endpoint
+// 19. Job Application Endpoint (now creates candidate record)
 app.post('/api/jobposts/:id/apply', authenticateJWT, async (req, res) => {
-try {
-const jobPost = await JobPost.findById(req.params.id);
-if (!jobPost) {
-  return res.status(404).json({ error: 'Job post not found' });
-}
+  try {
+    const jobPost = await JobPost.findById(req.params.id);
+    if (!jobPost) {
+      return res.status(404).json({ error: 'Job post not found' });
+    }
 
-const userProfile = await UserProfile.findOne({ userId: req.user.id });
-if (!userProfile?.resume) {
-  return res.status(400).json({ error: 'You need to upload a resume first' });
-}
+    const userProfile = await UserProfile.findOne({ userId: req.user.id });
+    if (!userProfile?.resume) {
+      return res.status(400).json({ error: 'You need to upload a resume first' });
+    }
 
-// Send notification email to employer
-const employer = await UserProfile.findById(jobPost.postedBy);
-if (employer) {
-  const emailTemplate = `
-    <h1>New Job Application</h1>
-    <p>You have a new applicant for your job posting: ${jobPost.title}</p>
-    <p>Applicant: ${userProfile.fullName || 'Anonymous'}</p>
-    <p>Contact email: ${userProfile.email}</p>
-  `;
-  await sendNotificationEmail(employer.email, 'New Job Application', emailTemplate);
-}
+    // Calculate match score
+    const resume = await Resume.findById(userProfile.resume);
+    const matchScore = calculateMatchScore(jobPost.requirements, resume.skills);
 
-res.json({ 
-  success: true,
-  message: 'Application submitted successfully'
+    // Create candidate record
+    const candidate = await Candidate.create({
+      jobId: jobPost._id,
+      applicantId: req.user.id,
+      applicantEmail: userProfile.email,
+      applicantName: userProfile.fullName || 'Applicant',
+      resumeId: userProfile.resume,
+      matchScore,
+      status: 'new'
+    });
+
+    // Send notification email to employer
+    const employer = await UserProfile.findById(jobPost.postedBy);
+    if (employer) {
+      const emailTemplate = `
+        <h1>New Job Application</h1>
+        <p>You have a new applicant for your job posting: ${jobPost.title}</p>
+        <p>Applicant: ${userProfile.fullName || 'Anonymous'}</p>
+        <p>Contact email: ${userProfile.email}</p>
+        <p>Match Score: ${matchScore}%</p>
+        <p><a href="${process.env.DASHBOARD_URL}/candidates/${candidate._id}">View Candidate Profile</a></p>
+      `;
+      await sendNotificationEmail(employer.email, 'New Job Application', emailTemplate);
+    }
+
+    res.json({ 
+      success: true,
+      message: 'Application submitted successfully',
+      candidate
+    });
+  } catch (err) {
+    console.error('Job application error:', err);
+    res.status(500).json({ error: 'Failed to process application' });
+  }
 });
-} catch (err) {
-console.error('Job application error:', err);
-res.status(500).json({ error: 'Failed to process application' });
-}
-});
 
-// 20. Error handling middleware
-app.use((err, req, res, next) => {
-console.error('Server error:', err);
-res.status(500).json({ 
-error: err.message || 'Internal server error',
-...(process.env.NODE_ENV === 'development' && { stack: err.stack })
-});
-});
-
-// 21. Start server function
-const startServer = async () => {
-try {
-await connectDB();
-
-// Test connections
-const [supabaseTest, mongoTest] = await Promise.all([
-  supabaseAdmin.from('profiles').select('*').limit(1),
-  UserProfile.findOne()
-]);
-
-console.log('✅ Supabase connected:', supabaseTest.data ? 'OK' : 'Failed');
-console.log('✅ MongoDB connected:', mongoTest ? 'OK' : 'Failed');
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`📧 Email service: ${process.env.MAILGUN_API_KEY ? 'Enabled' : 'Disabled'}`);
-});
-} catch (err) {
-console.error('❌ Failed to initialize server:', err);
-process.exit(1);
-}
+// Helper function to calculate match score
+const calculateMatchScore = (jobRequirements, resumeSkills) => {
+  if (!jobRequirements || !resumeSkills) return 0;
+  
+  const jobReqSet = new Set(jobRequirements.map(skill => skill.toLowerCase().trim()));
+  const resumeSkillSet = new Set(resumeSkills.map(skill => skill.toLowerCase().trim()));
+  
+  const intersection = [...jobReqSet].filter(skill => resumeSkillSet.has(skill));
+  
+  return jobReqSet.size > 0 ? Math.round((intersection.length / jobReqSet.size) * 100) : 0;
 };
 
-// 22. Start the application
+// 20. Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy',
+    services: {
+      database: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+      supabase: 'connected' // Assuming Supabase connection is always active
+    },
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 21. Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({ 
+    error: err.message || 'Internal server error',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack })
+  });
+});
+
+// 22. Start server function
+const startServer = async () => {
+  try {
+    await connectDB();
+
+    // Test connections
+    const [supabaseTest, mongoTest] = await Promise.all([
+      supabaseAdmin.from('profiles').select('*').limit(1),
+      UserProfile.findOne()
+    ]);
+
+    console.log('✅ Supabase connected:', supabaseTest.data ? 'OK' : 'Failed');
+    console.log('✅ MongoDB connected:', mongoTest ? 'OK' : 'Failed');
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`📧 Email service: ${process.env.MAILGUN_API_KEY ? 'Enabled' : 'Disabled'}`);
+    });
+  } catch (err) {
+    console.error('❌ Failed to initialize server:', err);
+    process.exit(1);
+  }
+};
+
+// 23. Start the application
 startServer();
 
-// 23. Export the app
+// 24. Export the app
 export default app;

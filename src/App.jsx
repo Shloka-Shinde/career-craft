@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
+import ChatBot from "./pages/ChatBot";
 
 // Importing Pages
 import Index from "./pages/Index";
@@ -44,7 +45,7 @@ const App = () => (
             <Route path="/post-job" element={<JobPost />} />
             <Route path="/interview-stats-chart" element={<InterviewStatsChart />} />
             <Route path="/category-forecast" element={<CategoryForecast />} />
-            
+            <Route path="/chatbot" element={<ChatBot />} />
             <Route path="/job-post-form" element={<JobPostForm/>} />
             <Route path="/filter-sidebar" element={<FilterSidebar />} />
             <Route path="/auth" element={<Auth />} />
