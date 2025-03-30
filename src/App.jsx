@@ -26,6 +26,7 @@ import ResumeList from "./pages/ResumeList.jsx";
 import JobSeekerDashboard from "./pages/JobSeekerDashboard.jsx"
 import SimCard from "./components/SimCard.jsx";
 import LearningPathway from "./pages/LearningPathway";
+import BehavioralAssessment from "./pages/BehavioralAssessment.jsx";
 // Create Query Client for React Query
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
             <Route path="/job-seeker-dashboard" element={<JobSeekerDashboard />}  />
             <Route path="/candidate-profile" element={<CandidateProfile />} />
             <Route path="/resume-list" element={<ResumeList />} />
+            <Route path="/ba" element={<BehavioralAssessment />} />
   
             <Route path="/live-data" element={<LiveData />} />
 
