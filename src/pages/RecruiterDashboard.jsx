@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import axios from "axios";
+import CandidateCard from "@/components/CandidateCard";
 
 // Mock data for candidates (will be replaced with matched candidates)
 const initialCandidates = [
@@ -35,6 +35,7 @@ const initialCandidates = [
     education: "B.S. Computer Science, Stanford University",
     rating: 4.5,
     avatar: "",
+    email: "emily.johnson@example.com",
   },
   {
     id: "2",
@@ -49,6 +50,7 @@ const initialCandidates = [
     education: "B.A. Design, Rhode Island School of Design",
     rating: 4.0,
     avatar: "",
+    email: "michael.williams@example.com",
   },
   {
     id: "3",
@@ -63,6 +65,7 @@ const initialCandidates = [
     education: "MBA, University of Chicago",
     rating: 4.8,
     avatar: "",
+    email: "david.martinez@example.com",
   },
   {
     id: "4",
@@ -77,6 +80,7 @@ const initialCandidates = [
     education: "B.S. Computer Science, MIT",
     rating: 4.2,
     avatar: "",
+    email: "sarah.thompson@example.com",
   },
 ];
 
@@ -111,7 +115,160 @@ const RecruiterDashboard = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
 
-  // Function to normalize skills (copied from LiveData component)
+  // New state for filters
+  const [filters, setFilters] = useState({
+    experienceLevel: [],
+    status: [],
+    skills: [],
+    location: [],
+    rating: null,
+    educationLevel: []
+  });
+
+  // Available filter options
+  const filterOptions = {
+    experienceLevel: [
+      { value: "entry", label: "Entry Level (0-2 years)" },
+      { value: "mid", label: "Mid Level (3-5 years)" },
+      { value: "senior", label: "Senior (6-10 years)" },
+      { value: "executive", label: "Executive (10+ years)" }
+    ],
+    status: [
+      { value: "New", label: "New" },
+      { value: "Reviewed", label: "Reviewed" },
+      { value: "Interview", label: "Interview" },
+      { value: "Rejected", label: "Rejected" },
+      { value: "Hired", label: "Hired" }
+    ],
+    educationLevel: [
+      { value: "highschool", label: "High School" },
+      { value: "bachelors", label: "Bachelor's Degree" },
+      { value: "masters", label: "Master's Degree" },
+      { value: "phd", label: "PhD" }
+    ],
+    rating: [
+      { value: 4, label: "4+ Stars" },
+      { value: 3, label: "3+ Stars" },
+      { value: 2, label: "2+ Stars" }
+    ]
+  };
+
+  // Extract unique skills and locations from candidates
+  const allSkills = [...new Set(
+    candidateMatches.flatMap(candidate => 
+      Array.isArray(candidate.skills) ? candidate.skills : []
+    )
+  )].filter(Boolean);
+
+  const allLocations = [...new Set(
+    candidateMatches.map(candidate => candidate.location)
+  )].filter(Boolean);
+
+  // Filter candidates based on selected filters
+  const filteredCandidates = candidateMatches.filter(candidate => {
+    // Experience level filter
+    if (filters.experienceLevel.length > 0) {
+      const candidateExp = parseInt(candidate.experience) || 0;
+      const matches = filters.experienceLevel.some(level => {
+        switch(level) {
+          case "entry": return candidateExp <= 2;
+          case "mid": return candidateExp >= 3 && candidateExp <= 5;
+          case "senior": return candidateExp >= 6 && candidateExp <= 10;
+          case "executive": return candidateExp > 10;
+          default: return true;
+        }
+      });
+      if (!matches) return false;
+    }
+
+    // Status filter
+    if (filters.status.length > 0 && !filters.status.includes(candidate.status)) {
+      return false;
+    }
+
+    // Skills filter
+    if (filters.skills.length > 0) {
+      const candidateSkills = Array.isArray(candidate.skills) ? 
+        candidate.skills.map(s => s.toLowerCase()) : [];
+      const hasAllSkills = filters.skills.every(skill => 
+        candidateSkills.includes(skill.toLowerCase())
+      );
+      if (!hasAllSkills) return false;
+    }
+
+    // Location filter
+    if (filters.location.length > 0 && !filters.location.includes(candidate.location)) {
+      return false;
+    }
+
+    // Rating filter
+    if (filters.rating && candidate.rating < filters.rating) {
+      return false;
+    }
+
+    // Education level filter
+    if (filters.educationLevel.length > 0) {
+      const candidateEducation = candidate.education.toLowerCase();
+      const matches = filters.educationLevel.some(level => {
+        switch(level) {
+          case "highschool": 
+            return candidateEducation.includes("high school") || 
+                   candidateEducation.includes("diploma");
+          case "bachelors": 
+            return candidateEducation.includes("bachelor") || 
+                   candidateEducation.includes("b.s") || 
+                   candidateEducation.includes("ba") ||
+                   candidateEducation.includes("undergraduate");
+          case "masters": 
+            return candidateEducation.includes("master") || 
+                   candidateEducation.includes("m.s") || 
+                   candidateEducation.includes("ma") ||
+                   candidateEducation.includes("mba") ||
+                   candidateEducation.includes("graduate");
+          case "phd": 
+            return candidateEducation.includes("phd") || 
+                   candidateEducation.includes("doctorate");
+          default: return true;
+        }
+      });
+      if (!matches) return false;
+    }
+
+    return true;
+  });
+
+  // Toggle filter selection
+  const toggleFilter = (filterType, value) => {
+    setFilters(prev => {
+      // For single-select filters (like rating)
+      if (filterType === 'rating') {
+        return { ...prev, rating: prev.rating === value ? null : value };
+      }
+      
+      // For multi-select filters
+      const currentValues = prev[filterType] || [];
+      return {
+        ...prev,
+        [filterType]: currentValues.includes(value)
+          ? currentValues.filter(v => v !== value)
+          : [...currentValues, value]
+      };
+    });
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFilters({
+      experienceLevel: [],
+      status: [],
+      skills: [],
+      location: [],
+      rating: null,
+      educationLevel: []
+    });
+  };
+
+  // Function to normalize skills
   const normalizeSkills = (skills) => {
     if (Array.isArray(skills)) {
       return skills.flatMap(skill => 
@@ -127,7 +284,8 @@ const RecruiterDashboard = () => {
     
     return [];
   };
-  // Function to calculate similarity score (copied from LiveData component)
+
+  // Function to calculate similarity score
   const calculateSimilarity = (jobSkills, resumeSkills) => {
     if (!jobSkills || !resumeSkills) return 0;
 
@@ -167,7 +325,8 @@ const RecruiterDashboard = () => {
           education: resume.resume_data?.education?.[0]?.degree || "Unknown Education",
           rating: (similarity / 20).toFixed(1) > 5 ? 5 : (similarity / 20).toFixed(1),
           avatar: "",
-          similarity: similarity.toFixed(1)
+          similarity: similarity.toFixed(1),
+          email: resume.resume_data?.personalInfo?.email || ""
         };
       })
       .sort((a, b) => b.similarity - a.similarity)
@@ -198,15 +357,15 @@ const RecruiterDashboard = () => {
         if (jobData.length > 0) {
           setSelectedJob(jobData[0]);
           const matches = findMatchingCandidates(jobData[0]);
-          setCandidateMatches(matches.length > 0 ? matches : initialCandidates.slice(0, 3));
+          setCandidateMatches(matches.length > 0 ? matches : initialCandidates);
         } else {
-          setCandidateMatches(initialCandidates.slice(0, 3));
+          setCandidateMatches(initialCandidates);
         }
         
         setIsLoading(false);
       } catch (error) {
         console.error('Error fetching data:', error);
-        setCandidateMatches(initialCandidates.slice(0, 3));
+        setCandidateMatches(initialCandidates);
         setIsLoading(false);
       }
     };
@@ -218,7 +377,7 @@ const RecruiterDashboard = () => {
   const handleJobSelect = (job) => {
     setSelectedJob(job);
     const matches = findMatchingCandidates(job);
-    setCandidateMatches(matches.length > 0 ? matches : initialCandidates.slice(0, 3));
+    setCandidateMatches(matches.length > 0 ? matches : initialCandidates);
   };
 
   return (
@@ -240,11 +399,11 @@ const RecruiterDashboard = () => {
               </Button>
               
               <Link to="/job-post-form">
-  <Button size="sm" className="flex items-center gap-2">
-    <Plus size={16} />
-    Post Job
-  </Button>
-</Link>
+                <Button size="sm" className="flex items-center gap-2">
+                  <Plus size={16} />
+                  Post Job
+                </Button>
+              </Link>
             </div>
           </div>
           
@@ -557,100 +716,8 @@ const RecruiterDashboard = () => {
                 {isLoading ? (
                   <div className="text-center text-muted-foreground p-8">Loading candidates...</div>
                 ) : (
-                  candidateMatches.map((candidate) => (
-                    <div key={candidate.id} className="glass rounded-xl p-6 hover:shadow-md transition-shadow">
-                      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
-                        <div className="flex items-start lg:items-center mb-4 lg:mb-0">
-                          <Avatar className="h-12 w-12 mr-4">
-                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
-                            <AvatarFallback>{candidate.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <h4 className="font-medium text-lg flex items-center">
-                              {candidate.name}
-                              <div className="ml-2 flex items-center">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    size={14}
-                                    className={i < Math.floor(candidate.rating) ? "text-yellow-400 fill-yellow-400" : i < candidate.rating ? "text-yellow-400 fill-yellow-400 opacity-50" : "text-gray-300"}
-                                  />
-                                ))}
-                              </div>
-                            </h4>
-                            <p className="text-muted-foreground">{candidate.title}</p>
-                            <div className="flex items-center mt-1 text-sm">
-                              <Badge variant="outline" className="mr-2">
-                                {candidate.experience} exp
-                              </Badge>
-                              <span>{candidate.location}</span>
-                              {candidate.similarity && (
-                                <Badge className="ml-2 bg-green-100 text-green-800">
-                                  {candidate.similarity}% match
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center gap-3">
-                          <Badge className={
-                            candidate.status === 'New' ? 'bg-blue-100 text-blue-800' : 
-                            candidate.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
-                            'bg-amber-100 text-amber-800'
-                          }>
-                            {candidate.status}
-                          </Badge>
-                          <div className="text-sm text-muted-foreground flex items-center">
-                            <Clock size={14} className="mr-1" />
-                            Applied {candidate.appliedDate}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <Separator className="my-4" />
-                      
-                      <div className="mb-4">
-                        <div className="text-sm font-medium mb-2">Skills</div>
-                        <div className="flex flex-wrap gap-2">
-                          {(Array.isArray(candidate.skills) ? candidate.skills : []).map((skill, index) => (
-                            <Badge key={index} variant="secondary" className="font-normal">
-                              {skill}
-                            </Badge>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm">
-                        <div>
-                          <div className="font-medium mb-1">Applied For</div>
-                          <div className="text-muted-foreground">{candidate.appliedFor}</div>
-                        </div>
-                        
-                        <div>
-                          <div className="font-medium mb-1">Education</div>
-                          <div className="text-muted-foreground">{candidate.education}</div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex flex-wrap justify-between items-center mt-4">
-                        <div className="text-sm text-muted-foreground">
-                          <Eye size={14} className="inline mr-1" /> Resume viewed 2 days ago
-                        </div>
-                        
-                        <div className="flex gap-2 mt-2 sm:mt-0">
-                          <Button variant="outline" size="sm" className="flex items-center gap-1">
-                            <MessageCircle size={14} />
-                            <span>Message</span>
-                          </Button>
-                          <Button variant="outline" size="sm" className="flex items-center gap-1">
-                            <Calendar size={14} />
-                            <span>Schedule Interview</span>
-                          </Button>
-                          <Button size="sm">View Profile</Button>
-                        </div>
-                      </div>
-                    </div>
+                  filteredCandidates.map((candidate) => (
+                    <CandidateCard key={candidate.id} candidate={candidate} />
                   ))
                 )}
               </div>
