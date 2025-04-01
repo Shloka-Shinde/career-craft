@@ -320,12 +320,12 @@ const RecruiterDashboard = () => {
           appliedFor: job.title,
           appliedDate: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
           status: "New",
-          skills: ["Java", "Python"],
+          skills: resumeSkills,
           experience: resume.resume_data?.experience?.[0]?.years || "Unknown",
           education: resume.resume_data?.education?.[0]?.degree || "Unknown Education",
           rating: (similarity / 20).toFixed(1) > 5 ? 5 : (similarity / 20).toFixed(1),
           avatar: "",
-          similarity: "100.0",
+          similarity: similarity.toFixed(1),
           email: resume.resume_data?.personalInfo?.email || ""
         };
       })
