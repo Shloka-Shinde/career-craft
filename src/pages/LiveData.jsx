@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
-import { supabase } from '../SupabaseClient';
+import { supabase } from '../supabaseClient';
 
 const LiveData = () => {
   const [jobs, setJobs] = useState([]);
