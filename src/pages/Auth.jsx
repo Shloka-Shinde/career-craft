@@ -27,6 +27,7 @@ const Auth = () => {
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
   const [signupConfirmPassword, setSignupConfirmPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [isRecruiterSignup, setIsRecruiterSignup] = useState(false);
   const [signupLoading, setSignupLoading] = useState(false);
 
@@ -92,6 +93,16 @@ const Auth = () => {
       });
       return;
     }
+
+    // Only require name for job seekers, not recruiters
+    if (!isRecruiterSignup && !fullName.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter your full name",
+        variant: "destructive",
+      });
+      return;
+    }
     
     if (signupPassword !== signupConfirmPassword) {
       toast({
@@ -128,17 +139,23 @@ const Auth = () => {
         return;
       }
 
-      // Upsert profile with correct is_recruiter value
+      // Upsert profile with correct is_recruiter value and full name
       console.log("UPSERTING PROFILE with is_recruiter:", isRecruiterSignup, typeof isRecruiterSignup);
+      const profileData = {
+        id: sessionData.session.user.id,
+        is_recruiter: !!isRecruiterSignup
+      };
+
+      // Add full name only for job seekers
+      if (!isRecruiterSignup && fullName.trim()) {
+        profileData.full_name = fullName.trim();
+      }
+
       const { data, error } = await supabase
         .from('profiles')
-        .upsert([
-          {
-            id: sessionData.session.user.id,
-            is_recruiter: !!isRecruiterSignup
-          }
-        ])
+        .upsert([profileData])
         .select();
+
       if (error) {
         console.error('Error upserting profile:', error);
         toast({
@@ -221,6 +238,47 @@ const Auth = () => {
                 
                 <TabsContent value="signup">
                   <form onSubmit={handleSignUp} className="space-y-4">
+                    <div className="py-2">
+                      <div className="flex items-center justify-between mb-4">
+                        <Label htmlFor="account-type" className="text-sm font-medium">Account Type</Label>
+                        <div className="flex items-center space-x-2">
+                          <span className={!isRecruiterSignup ? "text-sm font-semibold" : "text-sm text-muted-foreground"}>
+                            Job Seeker
+                          </span>
+                          <Switch
+                            id="account-type"
+                            checked={isRecruiterSignup}
+                            onCheckedChange={(checked) => {
+                              console.log("[LOG] Switch toggled, value:", checked, typeof checked);
+                              setIsRecruiterSignup(checked);
+                              // Clear name field when switching to recruiter
+                              if (checked) {
+                                setFullName("");
+                              }
+                            }}
+                          />
+                          <span className={isRecruiterSignup ? "text-sm font-semibold" : "text-sm text-muted-foreground"}>
+                            Recruiter
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Show name field only for job seekers */}
+                    {!isRecruiterSignup && (
+                      <div className="space-y-2">
+                        <Label htmlFor="full-name">Full Name *</Label>
+                        <Input
+                          id="full-name"
+                          type="text"
+                          placeholder="Enter your full name"
+                          value={fullName}
+                          onChange={(e) => setFullName(e.target.value)}
+                          required
+                        />
+                      </div>
+                    )}
+                    
                     <div className="space-y-2">
                       <Label htmlFor="signup-email">Email</Label>
                       <Input
@@ -255,28 +313,6 @@ const Auth = () => {
                         onChange={(e) => setSignupConfirmPassword(e.target.value)}
                         required
                       />
-                    </div>
-                    
-                    <div className="py-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="account-type" className="text-sm font-medium">Account Type</Label>
-                        <div className="flex items-center space-x-2">
-                          <span className={!isRecruiterSignup ? "text-sm font-semibold" : "text-sm text-muted-foreground"}>
-                            Job Seeker
-                          </span>
-                          <Switch
-                            id="account-type"
-                            checked={isRecruiterSignup}
-                            onCheckedChange={(checked) => {
-                              console.log("[LOG] Switch toggled, value:", checked, typeof checked);
-                              setIsRecruiterSignup(checked);
-                            }}
-                          />
-                          <span className={isRecruiterSignup ? "text-sm font-semibold" : "text-sm text-muted-foreground"}>
-                            Recruiter
-                          </span>
-                        </div>
-                      </div>
                     </div>
                     
                     <Button type="submit" className="w-full" disabled={signupLoading}>
