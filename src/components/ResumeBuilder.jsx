@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,6 @@ import { useResumeTemplates } from '@/hooks/use-resume-templates';
 import { useToast } from '@/hooks/use-toast';
 import { Briefcase, GraduationCap, User, Mail, Phone, MapPin, Plus } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { supabase } from '@/integrations/supabase/client';
-import { useNavigate } from "react-router-dom";
-import html2pdf from "html2pdf.js";
 
 export const ResumeBuilder = () => {
   const { resumes, createResume, updateResume, deleteResume } = useUserResumes();
@@ -19,9 +16,6 @@ export const ResumeBuilder = () => {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('edit');
   const [selectedResumeId, setSelectedResumeId] = useState(null);
-  const navigate = useNavigate();
-  const [activeView, setActiveView] = useState('edit');
-  const previewRef = useRef();
 
   // Find the primary resume or the first resume
   const primaryResume = resumes.find(r => r.is_primary) || resumes[0];
@@ -31,33 +25,18 @@ export const ResumeBuilder = () => {
 
   // Initialize form state based on selected resume or with empty values
   const [formState, setFormState] = useState({
-    name: 'My Resume',
+    name: selectedResume?.name || 'My Resume',
     personalInfo: {
-      fullName: 'John Doe',
-      email: 'johndoe@example.com',
-      phone: '(123) 456-7890',
-      location: 'San Francisco, CA',
-      title: 'Software Developer',
-      summary: 'A brief summary of your professional background and goals',
+      fullName: '',
+      email: '',
+      phone: '',
+      location: '',
+      title: '',
+      summary: '',
     },
-    experience: [
-      {
-        company: 'Company Name',
-        role: 'Job Title',
-        startDate: 'Jan 2020',
-        endDate: 'Present',
-        description: 'Describe your responsibilities and achievements',
-      }
-    ],
-    education: [
-      {
-        institution: 'University or School Name',
-        degree: 'Bachelor of Science in Computer Science',
-        year: '2015 - 2019',
-        description: 'Relevant coursework, honors, activities',
-      }
-    ],
-    skills: ['JavaScript', 'React', 'SQL', 'etc.'],
+    experience: [{ company: '', role: '', startDate: '', endDate: '', description: '' }],
+    education: [{ institution: '', degree: '', year: '', description: '' }],
+    skills: [''],
     ...selectedResume?.resume_data
   });
 
@@ -124,38 +103,37 @@ export const ResumeBuilder = () => {
 
   const saveResume = async () => {
     try {
-      const { data, error } = await supabase
-        .from('resumes')
-        .insert([
-          {
-            full_name: formState.personalInfo.fullName,
-            professional_title: formState.personalInfo.title,
-            email: formState.personalInfo.email,
-            phone: formState.personalInfo.phone,
-            location: formState.personalInfo.location,
-            professional_summary: formState.personalInfo.summary,
-            work_experience: formState.experience,
+      if (selectedResume) {
+        await updateResume(selectedResume.id, {
+          name: formState.name,
+          resume_data: {
+            personalInfo: formState.personalInfo,
+            experience: formState.experience,
             education: formState.education,
             skills: formState.skills,
           }
-        ])
-        .select();
-
-      if (error) {
-        console.error('Error saving resume:', error);
+        });
         toast({
-          title: 'Error',
-          description: 'Failed to save your resume. Please try again.',
-          variant: 'destructive'
+          title: 'Resume updated',
+          description: 'Your resume has been successfully updated.'
         });
       } else {
-        console.log('Resume saved:', data);
+        const newResume = await createResume({
+          name: formState.name,
+          resume_data: {
+            personalInfo: formState.personalInfo,
+            experience: formState.experience,
+            education: formState.education,
+            skills: formState.skills,
+          },
+          is_primary: resumes.length === 0, // Make primary if first resume
+          template_id: null
+        });
+        setSelectedResumeId(newResume.id);
         toast({
           title: 'Resume created',
           description: 'Your resume has been successfully created.'
         });
-        setSelectedResumeId(data[0].id);
-        setActiveTab('preview');
       }
     } catch (error) {
       console.error('Error saving resume:', error);
@@ -223,20 +201,6 @@ export const ResumeBuilder = () => {
     setActiveTab('edit');
   };
 
-  const handleDownload = () => {
-    if (previewRef.current) {
-      html2pdf()
-        .from(previewRef.current)
-        .set({
-          margin: 0.5,
-          filename: `${formState.personalInfo.fullName || "resume"}.pdf`,
-          html2canvas: { scale: 2 },
-          jsPDF: { unit: "in", format: "letter", orientation: "portrait" }
-        })
-        .save();
-    }
-  };
-
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -293,6 +257,7 @@ export const ResumeBuilder = () => {
         </div>
       )}
 
+      {(selectedResume || selectedResumeId === null) && (
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -569,19 +534,18 @@ export const ResumeBuilder = () => {
           <TabsContent value="preview" className="space-y-6">
             <Card>
               <CardContent className="pt-6">
-              <div ref={previewRef}>
                 <ResumePreview resume={formState} />
-              </div>
               </CardContent>
               <CardFooter className="flex justify-between">
                 <Button variant="outline" onClick={() => setActiveTab('edit')}>
                   Edit
                 </Button>
-              <Button onClick={handleDownload}>Download PDF</Button>
+                <Button>Download PDF</Button>
               </CardFooter>
             </Card>
           </TabsContent>
         </Tabs>
+      )}
     </div>
   );
 };
