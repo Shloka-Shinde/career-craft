@@ -112,7 +112,7 @@ const Index = () => {
           <div className="container mx-auto px-4 relative z-10">
             <div className="max-w-3xl mx-auto text-center mb-12 md:mb-16">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight animate-slide-up">
-                Connecting Talent <span className="text-primary">Without</span> Financial Barriers
+              https://github.com/Shloka-Shinde/career-craft/tree/main/src/pages   Connecting Talent <span className="text-primary">Without</span> Financial Barriers
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground mb-8 animate-slide-up" style={{ animationDelay: "0.1s" }}>
                 A free platform that bridges the gap between job seekers and recruiters, 
