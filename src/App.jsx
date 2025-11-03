@@ -14,6 +14,8 @@ import Auth from "./pages/Auth";
 import SetupProfile from "./pages/SetupProfile";
 import NotFound from "./pages/NotFound";
 import GitHubToGemini from "./components/gemini";
+import Category from "./pages/CategoryForecast";
+import About from "./pages/About";
 
 
 const queryClient = new QueryClient();
@@ -67,6 +69,8 @@ const App = () => {
                 <Route path="/" element={<Index />} />
                 <Route path="/jobs" element={<JobSearch />} />
                 <Route path="/gemini" element={<GitHubToGemini />} />
+                <Route path="/category" element={<Category />} />
+                <Route path="/about" element={<About />} />
                 <Route path="/post-job" element={
                   <ProtectedRoute 
                     element={<JobPost />} 

@@ -8,6 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 const JobPlacard = ({ job, isOpen, onClose, onApplied }) => {
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [alreadyApplied, setAlreadyApplied] = useState(false);
   const { user } = useAuth();
 
@@ -110,36 +111,60 @@ const JobPlacard = ({ job, isOpen, onClose, onApplied }) => {
       alert('You must be logged in to save a job.');
       return;
     }
+
+    setIsSaving(true);
+    
     if (!isBookmarked) {
-      // Save job
-      const { data, error } = await supabase
-        .from('saved_jobs')
-        .insert([
-          {
-            user_id: user.id,
-            job_id: job.id,
-          },
-        ]);
-      if (error) {
-        // Just log the error, don't alert
-        console.error('Failed to save job:', error);
-        return;
+      // Save job to saved_jobs table
+      try {
+        const { data, error } = await supabase
+          .from('saved_jobs')
+          .insert([
+            {
+              user_id: user.id,
+              job_id: job.id,
+            },
+          ])
+          .select();
+
+        if (error) {
+          console.error('Failed to save job:', error);
+          alert('Failed to save job: ' + error.message);
+          return;
+        }
+        
+        console.log('Job saved successfully:', data);
+        setIsBookmarked(true);
+        alert('Job saved successfully!');
+      } catch (error) {
+        console.error('Unexpected error while saving:', error);
+        alert('Failed to save job: ' + error.message);
       }
-      setIsBookmarked(true);
     } else {
-      // Unsave job
-      const { error } = await supabase
-        .from('saved_jobs')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('job_id', job.id);
-      if (error) {
-        // Just log the error, don't alert
-        console.error('Failed to unsave job:', error);
-        return;
+      // Remove job from saved_jobs table
+      try {
+        const { error } = await supabase
+          .from('saved_jobs')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('job_id', job.id);
+
+        if (error) {
+          console.error('Failed to unsave job:', error);
+          alert('Failed to unsave job: ' + error.message);
+          return;
+        }
+        
+        console.log('Job removed from saved jobs');
+        setIsBookmarked(false);
+        alert('Job removed from saved jobs!');
+      } catch (error) {
+        console.error('Unexpected error while unsaving:', error);
+        alert('Failed to unsave job: ' + error.message);
       }
-      setIsBookmarked(false);
     }
+    
+    setIsSaving(false);
   };
 
   const handleShare = () => {
@@ -206,6 +231,7 @@ const JobPlacard = ({ job, isOpen, onClose, onApplied }) => {
                   variant="ghost"
                   size="sm"
                   onClick={handleBookmark}
+                  disabled={isSaving}
                   className={`hover:bg-white/20 ${isBookmarked ? 'text-yellow-400' : 'text-white'}`}
                 >
                   <Bookmark size={16} fill={isBookmarked ? 'currentColor' : 'none'} />
@@ -308,6 +334,32 @@ const JobPlacard = ({ job, isOpen, onClose, onApplied }) => {
                     'Apply Now'
                   )}
                 </Button>
+                <Button
+                  onClick={handleBookmark}
+                  disabled={isSaving}
+                  variant="outline"
+                  className={`flex-1 py-3 rounded-xl font-semibold border-2 transition-all duration-300 ${
+                    isBookmarked 
+                      ? 'bg-yellow-50 text-yellow-700 border-yellow-300 hover:bg-yellow-100' 
+                      : 'bg-gray-50 text-gray-700 border-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  {isSaving ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"></div>
+                      {isBookmarked ? 'Unsaving...' : 'Saving...'}
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark 
+                        size={20} 
+                        className="mr-2" 
+                        fill={isBookmarked ? 'currentColor' : 'none'} 
+                      />
+                      {isBookmarked ? 'Saved' : 'Save Job'}
+                    </>
+                  )}
+                </Button>
               </>
             )}
           </div>
@@ -317,4 +369,4 @@ const JobPlacard = ({ job, isOpen, onClose, onApplied }) => {
   );
 };
 
-export default JobPlacard; 
+export default JobPlacard;

@@ -2,12 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
+import InterviewScheduler from "@/components/InterviewScheduler";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { BarChart3, Briefcase, Calendar, Clock, Eye, Filter, MessageCircle, Plus, Search, Star, Users } from "lucide-react";
+import { BarChart3, Briefcase, Calendar, Clock, Eye, Filter, MessageCircle, Plus, Search, Star, Users, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -145,6 +146,12 @@ const RecruiterDashboard = () => {
   const [selectedJob, setSelectedJob] = useState(null);
   const [jobApplicants, setJobApplicants] = useState([]);
   const [loadingApplicants, setLoadingApplicants] = useState(false);
+  const [selectedResume, setSelectedResume] = useState(null);
+  const [showPopup, setShowPopup] = useState(false);
+  const [loadingResume, setLoadingResume] = useState(false);
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [generatedMeetLink, setGeneratedMeetLink] = useState('');
+  const [interviewDetails, setInterviewDetails] = useState(null);
   const navigate = useNavigate();
 
   // Fetch posted jobs from Supabase
@@ -174,9 +181,10 @@ const RecruiterDashboard = () => {
     fetchPostedJobs();
   }, []);
 
-  // Function to fetch applicants for a specific job
-  const fetchJobApplicants = async (jobId) => {
+  // Function to fetch applicants for a specific job and switch to candidates tab
+  const handleViewApplicants = async (jobId, jobTitle) => {
     try {
+      setSelectedJob({ id: jobId, title: jobTitle });
       setLoadingApplicants(true);
       
       // First, fetch applications for the job
@@ -221,11 +229,167 @@ const RecruiterDashboard = () => {
       } else {
         setJobApplicants([]);
       }
+      
+      // Switch to candidates tab after fetching data
+      setActiveTab("candidates");
     } catch (err) {
       console.error('Error fetching job applicants:', err);
       setError('Failed to fetch job applicants');
     } finally {
       setLoadingApplicants(false);
+    }
+  };
+
+  // Function to handle view applicants from dropdown
+  const handleDropdownViewApplicants = (job) => {
+    handleViewApplicants(job.id, job.title);
+  };
+
+  // Function to handle viewing resume
+  const handleViewProfile = async (applicantId) => {
+    try {
+      setLoadingResume(true);
+      
+      // Fetch resumes from resumes table using applicant_id
+      const { data: resumes, error } = await supabase
+        .from('resumes')
+        .select('*')
+        .eq('user_id', applicantId)
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching resume:', error);
+        setError('Failed to fetch resume');
+        return;
+      }
+
+      if (resumes && resumes.length > 0) {
+        // Use the primary resume if available, otherwise use the most recent one
+        const resume = resumes.find(r => r.is_primary) || resumes[0];
+        
+        console.log('Raw resume data:', resume);
+        
+        // Parse JSON fields safely - handle both strings and objects
+        const parsedResume = {
+          ...resume,
+          work_experience: parseField(resume.work_experience),
+          education: parseField(resume.education),
+          skills: parseField(resume.skills),
+        };
+        
+        console.log('Parsed resume:', parsedResume);
+        
+        setSelectedResume(parsedResume);
+        setShowPopup(true);
+      } else {
+        setError('No resume found for this applicant');
+      }
+    } catch (err) {
+      console.error('Error fetching resume:', err);
+      setError('Failed to fetch resume');
+    } finally {
+      setLoadingResume(false);
+    }
+  };
+
+  // Helper function to parse fields safely
+  const parseField = (field) => {
+    if (field === null || field === undefined) {
+      return [];
+    }
+    
+    // If it's already an array, return it
+    if (Array.isArray(field)) {
+      return field;
+    }
+    
+    // If it's already an object (but not array), wrap it in array
+    if (typeof field === 'object' && field !== null) {
+      return [field];
+    }
+    
+    // If it's a string, try to parse it
+    if (typeof field === 'string') {
+      try {
+        const parsed = JSON.parse(field);
+        // Ensure we always return an array
+        return Array.isArray(parsed) ? parsed : [parsed];
+      } catch (error) {
+        console.warn('Failed to parse JSON field:', error, 'Field value:', field);
+        return [];
+      }
+    }
+    
+    return [];
+  };
+
+  // Function to generate Google Meet link
+  const generateMeetLink = () => {
+    // Create a more professional meeting ID
+    const adjectives = ['quick', 'brief', 'technical', 'interview', 'career', 'professional', 'team'];
+    const nouns = ['meeting', 'discussion', 'interview', 'call', 'session', 'review'];
+    
+    const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)];
+    const randomNoun = nouns[Math.floor(Math.random() * nouns.length)];
+    const randomNum = Math.floor(Math.random() * 1000);
+    
+    const meetingId = `${randomAdjective}-${randomNoun}-${randomNum}`;
+    return `https://meet.google.com/${meetingId}`;
+  };
+
+  // Function to handle schedule interview
+  const handleScheduleInterview = (applicantName, applicantEmail, jobTitle, applicantId) => {
+    const meetLink = generateMeetLink();
+    
+    const details = {
+      link: meetLink,
+      applicantName: applicantName || 'Applicant',
+      applicantEmail: applicantEmail,
+      jobTitle: jobTitle || 'Position',
+      applicantId: applicantId,
+      scheduledBy: 'Recruiter',
+      createdAt: new Date().toISOString()
+    };
+    
+    setGeneratedMeetLink(meetLink);
+    setInterviewDetails(details);
+    setShowInterviewModal(true);
+  };
+
+  const confirmInterview = () => {
+    // Save to database if needed
+    if (interviewDetails) {
+      saveInterviewToDatabase(interviewDetails);
+    }
+    setShowInterviewModal(false);
+    // Show success message
+    alert('Interview scheduled successfully!');
+  };
+
+  // Optional: Save interview to your database
+  const saveInterviewToDatabase = async (meetingDetails) => {
+    try {
+      const { data, error } = await supabase
+        .from('interviews')
+        .insert([
+          {
+            applicant_id: meetingDetails.applicantId,
+            job_id: selectedJob?.id,
+            meet_link: meetingDetails.link,
+            scheduled_by: meetingDetails.scheduledBy,
+            scheduled_for: new Date().toISOString(),
+            status: 'scheduled'
+          }
+        ]);
+
+      if (error) {
+        console.error('Error saving interview:', error);
+      } else {
+        console.log('Interview saved to database:', data);
+      }
+    } catch (err) {
+      console.error('Error saving interview to database:', err);
     }
   };
   
@@ -398,12 +562,9 @@ const RecruiterDashboard = () => {
                             <Button 
                               variant="outline" 
                               size="sm"
-                              onClick={() => {
-                                setSelectedJob(job);
-                                fetchJobApplicants(job.id);
-                              }}
+                              onClick={() => handleViewApplicants(job.id, job.title)}
                             >
-                              View
+                              View Applicants
                             </Button>
                           </div>
                         </div>
@@ -487,7 +648,14 @@ const RecruiterDashboard = () => {
                                 }>
                                   {application.status}
                                 </Badge>
-                                <Button variant="outline" size="sm">View Profile</Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  onClick={() => handleViewProfile(application.applicant_id)}
+                                  disabled={loadingResume}
+                                >
+                                  {loadingResume ? 'Loading...' : 'View Profile'}
+                                </Button>
                               </div>
                             </div>
                           );
@@ -544,7 +712,7 @@ const RecruiterDashboard = () => {
                   <Button variant="outline" size="sm">
                     Closed
                   </Button>
-                  <Button size="sm">
+                  <Button size="sm" onClick={() => navigate('/post-job')}>
                     Post New Job
                   </Button>
                 </div>
@@ -613,7 +781,9 @@ const RecruiterDashboard = () => {
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem>View Details</DropdownMenuItem>
-                                  <DropdownMenuItem>View Applicants</DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleDropdownViewApplicants(job)}>
+                                    View Applicants
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem>Edit Job</DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem className="text-red-500">
@@ -656,101 +826,347 @@ const RecruiterDashboard = () => {
               </div>
               
               <div className="grid grid-cols-1 gap-4">
-                {candidates.map((candidate) => (
-                  <div key={candidate.id} className="glass rounded-xl p-6 hover:shadow-md transition-shadow">
-                    <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
-                      <div className="flex items-start lg:items-center mb-4 lg:mb-0">
-                        <Avatar className="h-12 w-12 mr-4">
-                          <AvatarImage src={candidate.avatar} alt={candidate.name} />
-                          <AvatarFallback>{candidate.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h4 className="font-medium text-lg flex items-center">
-                            {candidate.name}
-                            <div className="ml-2 flex items-center">
-                              {[...Array(5)].map((_, i) => (
-                                <Star
-                                  key={i}
-                                  size={14}
-                                  className={i < Math.floor(candidate.rating) ? "text-yellow-400 fill-yellow-400" : i < candidate.rating ? "text-yellow-400 fill-yellow-400 opacity-50" : "text-gray-300"}
-                                />
+                {selectedJob && jobApplicants.length > 0 ? (
+                  // Show actual applicants from the database
+                  jobApplicants.map((application) => {
+                    const applicant = application.applicant;
+                    const applicantName = applicant?.full_name || applicant?.name || 'Unknown Applicant';
+                    const initials = applicantName !== 'Unknown Applicant' 
+                      ? applicantName.split(' ').map(n => n[0]).join('') 
+                      : 'U';
+                    const applicantTitle = applicant?.title || 'Applicant';
+                    const applicantLocation = applicant?.location || ' ';
+                    
+                    return (
+                      <div key={application.id} className="glass rounded-xl p-6 hover:shadow-md transition-shadow">
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
+                          <div className="flex items-start lg:items-center mb-4 lg:mb-0">
+                            <Avatar className="h-12 w-12 mr-4">
+                              <AvatarImage src={applicant?.avatar_url} alt={applicantName} />
+                              <AvatarFallback>{initials}</AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <h4 className="font-medium text-lg">{applicantName}</h4>
+                              <p className="text-muted-foreground">{applicantTitle}</p>
+                              <div className="flex items-center mt-1 text-sm">
+                                <Badge variant="outline" className="mr-2">
+                                  Applied on {new Date(application.created_at).toLocaleDateString()}
+                                </Badge>
+                                <span>{applicantLocation}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="flex flex-wrap items-center gap-3">
+                            <Badge className={
+                              application.status === 'Pending' ? 'bg-blue-100 text-blue-800' : 
+                              application.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
+                              application.status === 'Accepted' ? 'bg-green-100 text-green-800' :
+                              application.status === 'Rejected' ? 'bg-red-100 text-red-800' :
+                              'bg-amber-100 text-amber-800'
+                            }>
+                              {application.status || 'Pending'}
+                            </Badge>
+                          </div>
+                        </div>
+                        
+                        <Separator className="my-4" />
+                        
+                        {applicant?.skills && applicant.skills.length > 0 && (
+                          <div className="mb-4">
+                            <div className="text-sm font-medium mb-2">Skills</div>
+                            <div className="flex flex-wrap gap-2">
+                              {applicant.skills.map((skill, index) => (
+                                <Badge key={index} variant="secondary" className="font-normal">
+                                  {skill}
+                                </Badge>
                               ))}
                             </div>
-                          </h4>
-                          <p className="text-muted-foreground">{candidate.title}</p>
-                          <div className="flex items-center mt-1 text-sm">
-                            <Badge variant="outline" className="mr-2">
-                              {candidate.experience} exp
-                            </Badge>
-                            <span>{candidate.location}</span>
+                          </div>
+                        )}
+                        
+                        <div className="flex flex-wrap justify-between items-center mt-4">
+                          <div className="text-sm text-muted-foreground">
+                            Applied for: <strong>{selectedJob.title}</strong>
+                          </div>
+                          
+                          <div className="flex gap-2 mt-2 sm:mt-0">
+                            <Button variant="outline" size="sm" className="flex items-center gap-1">
+                              <MessageCircle size={14} />
+                              <span>Message</span>
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="flex items-center gap-1"
+                              onClick={() => handleScheduleInterview(
+                                applicantName, 
+                                applicant?.email, 
+                                selectedJob.title,
+                                application.applicant_id
+                              )}
+                            >
+                              <Calendar size={14} />
+                              <span>Schedule Interview</span>
+                            </Button>
+                            <Button 
+                              size="sm"
+                              onClick={() => handleViewProfile(application.applicant_id)}
+                              disabled={loadingResume}
+                            >
+                              {loadingResume ? 'Loading...' : 'View Profile'}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : selectedJob && jobApplicants.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">No applicants found for this job</p>
+                  </div>
+                ) : (
+                  // Show default candidates when no job is selected
+                  candidates.map((candidate) => (
+                    <div key={candidate.id} className="glass rounded-xl p-6 hover:shadow-md transition-shadow">
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4">
+                        <div className="flex items-start lg:items-center mb-4 lg:mb-0">
+                          <Avatar className="h-12 w-12 mr-4">
+                            <AvatarImage src={candidate.avatar} alt={candidate.name} />
+                            <AvatarFallback>{candidate.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <h4 className="font-medium text-lg flex items-center">
+                              {candidate.name}
+                              <div className="ml-2 flex items-center">
+                                {[...Array(5)].map((_, i) => (
+                                  <Star
+                                    key={i}
+                                    size={14}
+                                    className={i < Math.floor(candidate.rating) ? "text-yellow-400 fill-yellow-400" : i < candidate.rating ? "text-yellow-400 fill-yellow-400 opacity-50" : "text-gray-300"}
+                                  />
+                                ))}
+                              </div>
+                            </h4>
+                            <p className="text-muted-foreground">{candidate.title}</p>
+                            <div className="flex items-center mt-1 text-sm">
+                              <Badge variant="outline" className="mr-2">
+                                {candidate.experience} exp
+                              </Badge>
+                              <span>{candidate.location}</span>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-3">
+                          <Badge className={
+                            candidate.status === 'New' ? 'bg-blue-100 text-blue-800' : 
+                            candidate.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
+                            'bg-amber-100 text-amber-800'
+                          }>
+                            {candidate.status}
+                          </Badge>
+                          <div className="text-sm text-muted-foreground flex items-center">
+                            <Clock size={14} className="mr-1" />
+                            Applied {candidate.appliedDate}
                           </div>
                         </div>
                       </div>
                       
-                      <div className="flex flex-wrap items-center gap-3">
-                        <Badge className={
-                          candidate.status === 'New' ? 'bg-blue-100 text-blue-800' : 
-                          candidate.status === 'Reviewed' ? 'bg-purple-100 text-purple-800' : 
-                          'bg-amber-100 text-amber-800'
-                        }>
-                          {candidate.status}
-                        </Badge>
-                        <div className="text-sm text-muted-foreground flex items-center">
-                          <Clock size={14} className="mr-1" />
-                          Applied {candidate.appliedDate}
+                      <Separator className="my-4" />
+                      
+                      <div className="mb-4">
+                        <div className="text-sm font-medium mb-2">Skills</div>
+                        <div className="flex flex-wrap gap-2">
+                          {candidate.skills.map((skill) => (
+                            <Badge key={skill} variant="secondary" className="font-normal">
+                              {skill}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm">
+                        <div>
+                          <div className="font-medium mb-1">Applied For</div>
+                          <div className="text-muted-foreground">{candidate.appliedFor}</div>
+                        </div>
+                        
+                        <div>
+                          <div className="font-medium mb-1">Education</div>
+                          <div className="text-muted-foreground">{candidate.education}</div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap justify-between items-center mt-4">
+                        <div className="text-sm text-muted-foreground">
+                          <Eye size={14} className="inline mr-1" /> Resume viewed 2 days ago
+                        </div>
+                        
+                        <div className="flex gap-2 mt-2 sm:mt-0">
+                          <Button variant="outline" size="sm" className="flex items-center gap-1">
+                            <MessageCircle size={14} />
+                            <span>Message</span>
+                          </Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="flex items-center gap-1"
+                            onClick={() => handleScheduleInterview(
+                              candidate.name, 
+                              '', 
+                              candidate.appliedFor,
+                              candidate.id
+                            )}
+                          >
+                            <Calendar size={14} />
+                            <span>Schedule Interview</span>
+                          </Button>
+                          <Button size="sm">View Profile</Button>
                         </div>
                       </div>
                     </div>
-                    
-                    <Separator className="my-4" />
-                    
-                    <div className="mb-4">
-                      <div className="text-sm font-medium mb-2">Skills</div>
-                      <div className="flex flex-wrap gap-2">
-                        {candidate.skills.map((skill) => (
-                          <Badge key={skill} variant="secondary" className="font-normal">
-                            {skill}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 text-sm">
-                      <div>
-                        <div className="font-medium mb-1">Applied For</div>
-                        <div className="text-muted-foreground">{candidate.appliedFor}</div>
-                      </div>
-                      
-                      <div>
-                        <div className="font-medium mb-1">Education</div>
-                        <div className="text-muted-foreground">{candidate.education}</div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap justify-between items-center mt-4">
-                      <div className="text-sm text-muted-foreground">
-                        <Eye size={14} className="inline mr-1" /> Resume viewed 2 days ago
-                      </div>
-                      
-                      <div className="flex gap-2 mt-2 sm:mt-0">
-                        <Button variant="outline" size="sm" className="flex items-center gap-1">
-                          <MessageCircle size={14} />
-                          <span>Message</span>
-                        </Button>
-                        <Button variant="outline" size="sm" className="flex items-center gap-1">
-                          <Calendar size={14} />
-                          <span>Schedule Interview</span>
-                        </Button>
-                        <Button size="sm">View Profile</Button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </TabsContent>
           </Tabs>
         </div>
       </main>
+      
+      {/* Resume Popup */}
+      {showPopup && selectedResume && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h2 className="text-2xl font-bold">
+                  {selectedResume.full_name || 'Resume'}
+                </h2>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setShowPopup(false);
+                    setSelectedResume(null);
+                  }}
+                >
+                  <X size={20} />
+                </Button>
+              </div>
+
+              {/* Basic Information */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="font-semibold mb-2">Contact Information</h3>
+                  <p><strong>Email:</strong> {selectedResume.email || 'Not provided'}</p>
+                  <p><strong>Phone:</strong> {selectedResume.phone || 'Not provided'}</p>
+                  <p><strong>Location:</strong> {selectedResume.location || 'Not provided'}</p>
+                </div>
+                <div>
+                  <h3 className="font-semibold mb-2">Professional Details</h3>
+                  <p><strong>Title:</strong> {selectedResume.professional_title || 'Not provided'}</p>
+                </div>
+              </div>
+
+              {/* Professional Summary */}
+              {selectedResume.professional_summary && (
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-2">Professional Summary</h3>
+                  <p className="text-gray-700">{selectedResume.professional_summary}</p>
+                </div>
+              )}
+
+              {/* Skills */}
+              {selectedResume.skills && selectedResume.skills.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-2">Skills</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedResume.skills.map((skill, index) => (
+                      <Badge key={index} variant="secondary" className="font-normal">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Work Experience */}
+              {selectedResume.work_experience && selectedResume.work_experience.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-2">Work Experience</h3>
+                  <div className="space-y-4">
+                    {selectedResume.work_experience.map((exp, index) => (
+                      <div key={index} className="border-l-4 border-primary pl-4">
+                        <h4 className="font-medium">{exp.role} at {exp.company}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {exp.startDate} - {exp.endDate}
+                        </p>
+                        <p className="mt-1 text-sm">{exp.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Education */}
+              {selectedResume.education && selectedResume.education.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-2">Education</h3>
+                  <div className="space-y-4">
+                    {selectedResume.education.map((edu, index) => (
+                      <div key={index} className="border-l-4 border-green-500 pl-4">
+                        <h4 className="font-medium">{edu.degree}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {edu.institution} • {edu.year}
+                        </p>
+                        <p className="mt-1 text-sm">{edu.description}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2 mt-6">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowPopup(false);
+                    setSelectedResume(null);
+                  }}
+                >
+                  Close
+                </Button>
+                <Button
+                  onClick={() => handleScheduleInterview(
+                    selectedResume.full_name,
+                    selectedResume.email,
+                    selectedJob?.title || 'Position',
+                    selectedResume.user_id
+                  )}
+                >
+                  Schedule Interview
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interview Scheduler Component */}
+      // In the InterviewScheduler section of RecruiterDashboard:
+{showInterviewModal && interviewDetails && (
+  <InterviewScheduler
+    applicantName={interviewDetails.applicantName}
+    applicantEmail={interviewDetails.applicantEmail}
+    jobTitle={interviewDetails.jobTitle}
+    applicantId={interviewDetails.applicantId}
+    jobId={selectedJob?.id} // This is automatically passed from the selected job
+    meetLink={generatedMeetLink}
+    onClose={() => setShowInterviewModal(false)}
+    onConfirm={confirmInterview}
+  />
+)}
       
       <Footer />
     </div>

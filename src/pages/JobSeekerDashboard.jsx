@@ -7,32 +7,31 @@ import { Navigate, useNavigate } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Briefcase, Calendar, FileText, Clock, BookmarkPlus } from "lucide-react";
+import { Briefcase, Calendar, FileText, Clock, BookmarkPlus, Video, MapPin, Building } from "lucide-react";
 import { InterviewCalendar } from "@/components/InterviewCalendar";
 import { ResumeBuilder } from "@/components/ResumeBuilder";
 import JobCard from "@/components/JobCard";
 import JobPlacard from "@/components/JobPlacard";
+import { Badge } from "@/components/ui/badge";
 
 const JobSeekerDashboard = () => {
   const { isAuthenticated, isLoading, user, isRecruiter } = useAuth();
   const navigate = useNavigate();
   const [savedJobs, setSavedJobs] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [interviews, setInterviews] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadingInterviews, setLoadingInterviews] = useState(false);
   const [dashboardTab, setDashboardTab] = useState("applications");
   const [selectedResume, setSelectedResume] = useState(null);
   const [selectedResumeId, setSelectedResumeId] = useState(null);
   const [activeTab, setActiveTab] = useState('preview');
-  const [jobs, setJobs] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
   const [isPlacardOpen, setIsPlacardOpen] = useState(false);
 
   const handlePlacardApply = async () => {
     if (!selectedJob) return;
 
-    // The placard's own apply function handles inserting into 'applications'.
-    // This handler just needs to remove it from 'saved_jobs'.
     const { error: deleteError } = await supabase
       .from('saved_jobs')
       .delete()
@@ -42,7 +41,6 @@ const JobSeekerDashboard = () => {
     if (deleteError) {
       alert(`Error removing from saved jobs: ${deleteError.message}`);
     } else {
-      // Manually update states for instant feedback
       const appliedJob = savedJobs.find(j => j.id === selectedJob.id);
       if (appliedJob) {
         setApplications(currentApplications => [...currentApplications, { job: appliedJob, ...selectedJob }]);
@@ -50,93 +48,136 @@ const JobSeekerDashboard = () => {
       }
     }
 
-    setIsPlacardOpen(false); // Close placard on successful apply
+    setIsPlacardOpen(false);
   };
 
-  // Redirect if not authenticated or if user is a recruiter
-  // Note: This check is moved after all hooks to prevent "Rendered fewer hooks than expected" error
+  // Fetch interviews for the current user
+  const fetchInterviews = async () => {
+    if (!user) return;
+    
+    setLoadingInterviews(true);
+    try {
+      const { data: interviewsData, error } = await supabase
+        .from('interviews')
+        .select(`
+          *,
+          jobs (
+            title,
+            company,
+            location
+          )
+        `)
+        .eq('applicant_id', user.id)
+        .order('interview_date', { ascending: true })
+        .order('interview_time', { ascending: true });
+  
+      if (error) {
+        console.error('Error fetching interviews:', error);
+        setInterviews([]);
+      } else {
+        console.log('Fetched interviews:', interviewsData);
+        setInterviews(interviewsData || []);
+      }
+    } catch (error) {
+      console.error('Error fetching interviews:', error);
+      setInterviews([]);
+    } finally {
+      setLoadingInterviews(false);
+    }
+  };
 
   useEffect(() => {
     if (!user) return;
-
+  
     const fetchDashboardData = async () => {
       setLoadingData(true);
       try {
-        // Fetch saved jobs
-        const { data: savedJobsData, error: savedJobsError } = await supabase
-          .from('saved_jobs')
-          .select('*, job:jobs(*)')
-          .eq('user_id', user.id);
-
-        if (savedJobsError) throw savedJobsError;
-
-        // Fetch applications for the user
+        // Fetch applications with jobs
         const { data: applicationsData, error: applicationsError } = await supabase
           .from('applications')
           .select('*')
-          .eq('applicant_id', user.id);
+          .eq('applicant_id', user.id)
+          .order('created_at', { ascending: false });
 
         if (applicationsError) {
           console.error('Error fetching applications:', applicationsError);
+          setApplications([]);
         } else {
           console.log('Applications:', applicationsData);
-        }
 
-        const savedJobsList = savedJobsData.map(item => item.job);
-        setSavedJobs(savedJobsList);
-        setApplications(applicationsData);
+          if (applicationsData && applicationsData.length > 0) {
+            const jobIds = applicationsData.map(app => app.job_id).filter(id => id);
+            console.log('Job IDs to fetch:', jobIds);
 
-        const jobIds = applicationsData.map(app => app.job_id);
+            const { data: jobsData, error: jobsError } = await supabase
+              .from('jobs')
+              .select('*')
+              .in('id', jobIds);
 
-        let jobs = [];
-        if (jobIds.length > 0) {
-          const { data: jobsData, error: jobsError } = await supabase
-            .from('jobs')
-            .select('*')
-            .in('id', jobIds);
-          if (jobsError) {
-            console.error('Error fetching jobs:', jobsError);
+            if (jobsError) {
+              console.error('Error fetching jobs:', jobsError);
+              setApplications([]);
+            } else {
+              console.log('Fetched jobs:', jobsData);
+
+              const applicationsWithJobs = applicationsData.map(application => {
+                const job = jobsData.find(job => job.id === application.job_id);
+                return {
+                  ...application,
+                  job: job || null
+                };
+              });
+
+              console.log('Applications with jobs:', applicationsWithJobs);
+              setApplications(applicationsWithJobs);
+            }
           } else {
-            console.log("Fetched jobs for applications:", jobsData);
-            jobs = jobsData;
+            setApplications([]);
           }
         }
 
-        const applicationsWithJobs = applicationsData.map(app => ({
-          ...app,
-          job: jobs.find(job => job.id === app.job_id)
-        }));
+        // Fetch saved jobs with job details
+        const { data: savedJobsData, error: savedJobsError } = await supabase
+          .from('saved_jobs')
+          .select(`
+            *,
+            jobs (*)
+          `)
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false });
 
-        setApplications(applicationsWithJobs);
+        if (savedJobsError) {
+          console.error('Error fetching saved jobs:', savedJobsError);
+          setSavedJobs([]);
+        } else {
+          console.log('Saved jobs data:', savedJobsData);
+          
+          // Extract the job objects from the saved_jobs data
+          const savedJobsList = savedJobsData
+            .map(item => item.jobs)
+            .filter(job => job !== null);
+          
+          console.log('Processed saved jobs:', savedJobsList);
+          setSavedJobs(savedJobsList);
+        }
+
+        // Fetch interviews
+        await fetchInterviews();
+  
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
+        setApplications([]);
+        setSavedJobs([]);
+        setInterviews([]);
       } finally {
         setLoadingData(false);
       }
     };
-
+  
     fetchDashboardData();
-
-    // Set up realtime subscription for saved jobs and applications
-    // Only set up subscriptions if user exists
+  
+    // Set up realtime subscriptions
     if (user) {
-      const savedJobsChannel = supabase
-        .channel('saved_jobs_changes')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'saved_jobs',
-            filter: `user_id=eq.${user.id}`,
-          },
-          () => {
-            // Refetch saved jobs when changes occur
-            fetchDashboardData();
-          }
-        )
-        .subscribe();
-
       const applicationsChannel = supabase
         .channel('applications_changes')
         .on(
@@ -148,66 +189,70 @@ const JobSeekerDashboard = () => {
             filter: `applicant_id=eq.${user.id}`,
           },
           () => {
-            // Refetch applications when changes occur
             fetchDashboardData();
           }
         )
         .subscribe();
 
+      const savedJobsChannel = supabase
+        .channel('saved_jobs_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'saved_jobs',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            fetchDashboardData();
+          }
+        )
+        .subscribe();
+
+      const interviewsChannel = supabase
+        .channel('interviews_changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'interviews',
+            filter: `applicant_id=eq.${user.id}`,
+          },
+          () => {
+            fetchInterviews();
+          }
+        )
+        .subscribe();
+        
+  
       return () => {
-        supabase.removeChannel(savedJobsChannel);
         supabase.removeChannel(applicationsChannel);
+        supabase.removeChannel(savedJobsChannel);
+        supabase.removeChannel(interviewsChannel);
       };
     }
   }, [user]);
 
-  useEffect(() => {
-    if (!user) return;
+  // Format interview date and time
+  const formatInterviewDateTime = (interview) => {
+    const date = new Date(interview.interview_date);
+    const formattedDate = date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    return `${formattedDate} at ${interview.interview_time}`;
+  };
 
-    const fetchJobsForApplications = async () => {
-      setLoading(true);
-      // 1. Fetch applications for the user
-      const { data: applications, error: appError } = await supabase
-        .from('applications')
-        .select('*')
-        .eq('applicant_id', user.id);
-
-      if (appError) {
-        console.error('Error fetching applications:', appError);
-        setJobs([]);
-        setLoading(false);
-        return;
-      }
-
-      // 2. Get all job_ids from applications
-      const jobIds = applications.map(app => app.job_id);
-
-      if (jobIds.length === 0) {
-        setJobs([]);
-        setLoading(false);
-        return;
-      }
-
-      // 3. Fetch all jobs with those IDs
-      const { data: jobsData, error: jobsError } = await supabase
-        .from('jobs')
-        .select('*')
-        .in('id', jobIds);
-
-      if (jobsError) {
-        console.error('Error fetching jobs:', jobsError);
-        setJobs([]);
-      } else {
-        console.log("Fetched jobs for applications:", jobsData);
-        setJobs(jobsData);
-      }
-      setLoading(false);
-    };
-
-    fetchJobsForApplications();
-  }, [user]);
-
-
+  // Check if interview is upcoming
+  const isUpcomingInterview = (interview) => {
+    const interviewDateTime = new Date(`${interview.interview_date}T${interview.interview_time}`);
+    return interviewDateTime > new Date();
+  };
 
   // Redirect if not authenticated or if user is a recruiter
   if (!isLoading && (!isAuthenticated || isRecruiter)) {
@@ -226,6 +271,9 @@ const JobSeekerDashboard = () => {
   }
 
   console.log('Current user ID:', user.id);
+  console.log('Applications data:', applications);
+  console.log('Saved jobs data:', savedJobs);
+  console.log('Interviews data:', interviews);
 
   return (
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
@@ -265,7 +313,7 @@ const JobSeekerDashboard = () => {
                   <CardDescription className="text-blue-100">Track the status of your job applications</CardDescription>
                 </CardHeader>
                 <CardContent className="p-6">
-                  {loading ? (
+                  {loadingData ? (
                     <div className="space-y-4">
                       {[1, 2, 3].map((i) => (
                         <div key={i} className="p-4 border rounded-md animate-pulse">
@@ -275,7 +323,7 @@ const JobSeekerDashboard = () => {
                         </div>
                       ))}
                     </div>
-                  ) : jobs.length === 0 ? (
+                  ) : applications.length === 0 ? (
                     <div className="text-center py-10">
                       <Briefcase className="h-16 w-16 mx-auto text-muted-foreground/50" />
                       <h3 className="mt-4 text-lg font-medium">No applications yet</h3>
@@ -284,30 +332,46 @@ const JobSeekerDashboard = () => {
                     </div>
                   ) : (
                     <div className="space-y-6">
-                      {applications.map(app => (
-                        app.job ? (
+                      {applications.map(application => (
+                        application.job ? (
                           <JobCard
-                            key={app.id}
-                            id={app.job.id}
-                            title={app.job.title}
-                            company={app.job.company}
-                            location={app.job.location}
-                            type={app.job.job_type || app.job.type}
-                            postedDate={new Date(app.job.created_at).toLocaleDateString()}
-                            description={app.job.description}
-                            salary={app.job.salary}
+                            key={application.id}
+                            id={application.job.id}
+                            title={application.job.title}
+                            company={application.job.company}
+                            location={application.job.location}
+                            type={application.job.job_type || application.job.type}
+                            postedDate={new Date(application.job.created_at).toLocaleDateString()}
+                            description={application.job.description}
+                            salary={application.job.salary}
                             isNew={false}
                             actionButton={
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200"
-                              >
-                                View Status
-                              </Button>
+                              <div className="flex flex-col gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="bg-blue-100 text-blue-700 border-blue-300 hover:bg-blue-200"
+                                >
+                                  {application.status || 'Applied'}
+                                </Button>
+                                <span className="text-xs text-muted-foreground">
+                                  Applied on {new Date(application.created_at).toLocaleDateString()}
+                                </span>
+                              </div>
                             }
                           />
-                        ) : null
+                        ) : (
+                          <div key={application.id} className="p-4 border rounded-md bg-muted/50">
+                            <p className="text-muted-foreground">Application for job ID: {application.job_id}</p>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="mt-2"
+                            >
+                              {application.status || 'Applied'}
+                            </Button>
+                          </div>
+                        )
                       ))}
                     </div>
                   )}
@@ -362,7 +426,13 @@ const JobSeekerDashboard = () => {
                       </div>
                       <h3 className="mt-4 text-lg font-medium text-slate-700">No saved jobs</h3>
                       <p className="mt-1 text-slate-500">Save jobs you're interested in to apply later.</p>
-                      <Button className="mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700" size="sm">Browse Jobs</Button>
+                      <Button 
+                        className="mt-4 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700" 
+                        size="sm"
+                        onClick={() => navigate('/jobs')}
+                      >
+                        Browse Jobs
+                      </Button>
                     </div>
                   )}
                 </CardContent>
@@ -376,7 +446,131 @@ const JobSeekerDashboard = () => {
                   <p className="text-purple-100">Manage your upcoming interviews</p>
                 </div>
                 <div className="p-6">
-                  <InterviewCalendar />
+                  {/* Upcoming Interviews List */}
+                  <div className="mb-8">
+                    <h3 className="text-lg font-semibold mb-4 text-slate-800">Upcoming Interviews</h3>
+                    {loadingInterviews ? (
+                      <div className="space-y-4">
+                        {[1, 2, 3].map((i) => (
+                          <div key={i} className="p-4 border rounded-lg animate-pulse">
+                            <div className="h-5 bg-muted rounded w-1/3 mb-2"></div>
+                            <div className="h-4 bg-muted rounded w-1/4 mb-4"></div>
+                            <div className="h-4 bg-muted rounded w-full"></div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : interviews.filter(interview => isUpcomingInterview(interview)).length === 0 ? (
+                      <div className="text-center py-8 border-2 border-dashed border-purple-200 rounded-lg bg-purple-50/50">
+                        <Calendar className="h-12 w-12 mx-auto text-purple-300 mb-4" />
+                        <h4 className="text-lg font-medium text-slate-700 mb-2">No upcoming interviews</h4>
+                        <p className="text-slate-500 mb-4">You don't have any scheduled interviews yet.</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {interviews
+                          .filter(interview => isUpcomingInterview(interview))
+                          .map((interview) => (
+                            <div key={interview.id} className="border border-purple-200 rounded-lg p-4 bg-white shadow-sm hover:shadow-md transition-shadow">
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-2">
+                                    <Building className="h-5 w-5 text-purple-600" />
+                                    <h4 className="font-semibold text-slate-800">
+                                      {interview.jobs?.title || 'Interview'}
+                                    </h4>
+                                    <Badge variant="outline" className="bg-green-100 text-green-700 border-green-200">
+                                      Upcoming
+                                    </Badge>
+                                  </div>
+                                  <p className="text-slate-600 mb-1 flex items-center gap-2">
+                                    <span className="font-medium">{interview.jobs?.company}</span>
+                                    {interview.jobs?.location && (
+                                      <>
+                                        <span>•</span>
+                                        <MapPin className="h-3 w-3" />
+                                        <span>{interview.jobs.location}</span>
+                                      </>
+                                    )}
+                                  </p>
+                                  <p className="text-slate-500 text-sm flex items-center gap-2">
+                                    <Calendar className="h-3 w-3" />
+                                    {formatInterviewDateTime(interview)}
+                                  </p>
+                                  <p className="text-slate-500 text-sm flex items-center gap-2 mt-1">
+                                    <Clock className="h-3 w-3" />
+                                    Duration: {interview.duration} minutes
+                                  </p>
+                                  <p className="text-slate-500 text-sm flex items-center gap-2 mt-1">
+                                    <Video className="h-3 w-3" />
+                                    Type: {interview.interview_type}
+                                  </p>
+                                  {interview.meet_link && (
+                                    <div className="mt-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                                        onClick={() => window.open(interview.meet_link, '_blank')}
+                                      >
+                                        Join Meeting
+                                      </Button>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                              {interview.additional_notes && (
+                                <div className="mt-3 p-3 bg-slate-50 rounded-md border border-slate-200">
+                                  <p className="text-sm text-slate-600">
+                                    <span className="font-medium">Notes: </span>
+                                    {interview.additional_notes}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Past Interviews */}
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4 text-slate-800">Past Interviews</h3>
+                    {interviews.filter(interview => !isUpcomingInterview(interview)).length === 0 ? (
+                      <div className="text-center py-4 text-slate-500">
+                        No past interviews
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {interviews
+                          .filter(interview => !isUpcomingInterview(interview))
+                          .map((interview) => (
+                            <div key={interview.id} className="border border-slate-200 rounded-lg p-4 bg-slate-50/50">
+                              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-3 mb-1">
+                                    <Building className="h-4 w-4 text-slate-500" />
+                                    <h4 className="font-medium text-slate-700">
+                                      {interview.jobs?.title || 'Interview'}
+                                    </h4>
+                                    <Badge variant="outline" className="bg-slate-100 text-slate-600 border-slate-300">
+                                      Completed
+                                    </Badge>
+                                  </div>
+                                  <p className="text-slate-500 text-sm">
+                                    {interview.jobs?.company} • {formatInterviewDateTime(interview)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Interview Calendar Component */}
+                  <div className="mt-8">
+                    <InterviewCalendar interviews={interviews} />
+                  </div>
                 </div>
               </div>
             </TabsContent>
@@ -393,8 +587,6 @@ const JobSeekerDashboard = () => {
               </div>
             </TabsContent>
           </Tabs>
-
-
         </div>
       </main>
       

@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Briefcase, MapPin, DollarSign, Mail, FileText, Clock } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const JobPostForm = ({ onJobPostSuccess }) => {
+  const { user } = useAuth();
   const [formData, setFormData] = useState({
-    title: 'Software Engineer',
-    company: 'Acme Corp',
-    location: 'Remote',
-    description: 'Join our team to build amazing products!',
-    salary: '100000',
-    contactEmail: 'hr@acme.com',
-    job_type: 'Full-time',
+    title: '',
+    company: '',
+    location: '',
+    description: '',
+    salary: '',
+    contactEmail: '',
+    job_type: '',
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [skills, setSkills] = useState([]);
@@ -49,9 +51,15 @@ const JobPostForm = ({ onJobPostSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!user) {
+      alert('You must be logged in to post a job');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      // Insert job post into Supabase
+      // Insert job post into Supabase with created_by field
       const { data, error } = await supabase
         .from('jobs')
         .insert([
@@ -64,13 +72,21 @@ const JobPostForm = ({ onJobPostSuccess }) => {
             contact_email: formData.contactEmail,
             skills: skills,
             job_type: formData.job_type,
+            created_by: user.id, // Add the user_id here
+            status: 'active',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           },
         ])
         .select();
+      
       if (error) {
         throw error;
       }
+      
+      console.log('Job posted successfully with user ID:', user.id);
       alert('Job Post Created Successfully!');
+      
       // Reset form after successful submission
       setFormData({
         title: '',
@@ -83,6 +99,7 @@ const JobPostForm = ({ onJobPostSuccess }) => {
       });
       setSkills([]);
       setSkillInput("");
+      
       if (onJobPostSuccess) {
         onJobPostSuccess();
       }

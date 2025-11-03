@@ -7,13 +7,13 @@ app = Flask(__name__)
 CORS(app)  # Allow frontend to access backend
 
 # Load SARIMA predictions
-with open('/Users/shlokasujitshinde/Downloads/career-craft/backend/data/sarima_predictions.pkl', 'rb') as file:
+with open('/Users/ishamadlani/Documents/career-craft-2/backend/data/sarima_predictions.pkl', 'rb') as file:
 
 
     sarima_data = pickle.load(file)
 
 # Load the DataFrame from the pickle file
-with open('/Users/shlokasujitshinde/Downloads/career-craft/backend/data/sarima_predictions.pkl', 'rb') as file:
+with open('/Users/ishamadlani/Documents/career-craft-2/backend/data/df_filtered.pkl', 'rb') as file:
 
 
     df = pickle.load(file)
